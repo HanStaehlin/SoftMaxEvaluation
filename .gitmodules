@@ -1,0 +1,3 @@
+[submodule "quantlib"]
+	path = quantlib
+	url = https://github.com/HanStaehlin/quantlib.git
