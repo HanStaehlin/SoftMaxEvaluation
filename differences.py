@@ -40,6 +40,12 @@ def util_main(**kwargs):
         l1_differences = []
         partial_l2_differences = []
         partial_l1_differences = []
+        integer_l2_differences = []
+        integer_l1_differences = []
+        fast_integer_l2_differences = []  # Added line
+        fast_integer_l1_differences = []  # Added line
+        partial_integer_l2_differences = []  # Added line
+        partial_integer_l1_differences = []  # Added line
 
         for N in N_range:
             A = np.random.randint(-128, 127, size=(1, N, N), dtype=np.int8)
@@ -59,25 +65,68 @@ def util_main(**kwargs):
             l1_diff = np.linalg.norm((softmax - fast_softmax)[0], 1)
             partial_l2_diff = np.linalg.norm((softmax - fast_partial_softmax)[0], 2)
             partial_l1_diff = np.linalg.norm((softmax - fast_partial_softmax)[0], 1)
-            
+            integer_l2_diff = np.linalg.norm((softmax - integer_softmax)[0], 2)
+            integer_l1_diff = np.linalg.norm((softmax - integer_softmax)[0], 1)
+            fast_integer_l2_diff = np.linalg.norm((softmax - fast_integer_softmax)[0], 2)  # Added line
+            fast_integer_l1_diff = np.linalg.norm((softmax - fast_integer_softmax)[0], 1)  # Added line
+            partial_integer_l2_diff = np.linalg.norm((softmax - fast_partial_integer_softmax)[0], 2)  # Added line
+            partial_integer_l1_diff = np.linalg.norm((softmax - fast_partial_integer_softmax)[0], 1)  # Added line
+
             l2_differences.append(l2_diff)
             l1_differences.append(l1_diff)
             partial_l2_differences.append(partial_l2_diff)
             partial_l1_differences.append(partial_l1_diff)
+            integer_l2_differences.append(integer_l2_diff)
+            integer_l1_differences.append(integer_l1_diff)
+            fast_integer_l2_differences.append(fast_integer_l2_diff)  # Added line
+            fast_integer_l1_differences.append(fast_integer_l1_diff)  # Added line
+            partial_integer_l2_differences.append(partial_integer_l2_diff)  # Added line
+            partial_integer_l1_differences.append(partial_integer_l1_diff)  # Added line
 
-        return l2_differences, l1_differences, partial_l2_differences, partial_l1_differences
+        return l2_differences, l1_differences, partial_l2_differences, partial_l1_differences, integer_l2_differences, integer_l1_differences, fast_integer_l2_differences, fast_integer_l1_differences, partial_integer_l2_differences, partial_integer_l1_differences  # Modified line
+
+    # Rest of the code remains the same
 
     N_range = [64, 128, 256, 512, 1024]
-    l2_differences, l1_differences, partial_l2_differences, partial_l1_differences = calculate_differences(N_range)
+    l2_differences, l1_differences, partial_l2_differences, partial_l1_differences, integer_l2_differences, integer_l1_differences, fast_integer_l2_differences, fast_integer_l1_differences, partial_integer_l2_differences, partial_integer_l1_differences = calculate_differences(N_range)
 
-    plt.plot(N_range, l2_differences, label='L2 Differences (Softmax)')
-    plt.plot(N_range, l1_differences, label='L1 Differences (Softmax)')
+    plt.figure(figsize=(12, 12))
+
+    plt.subplot(2, 2, 1)
+    plt.plot(N_range, l2_differences, label='L2 Differences (Fast Softmax)')
     plt.plot(N_range, partial_l2_differences, label='L2 Differences (Partial Softmax)')
+    plt.xlabel('N')
+    plt.ylabel('L2 Differences')
+    plt.title('Softmax L2 Differences for Different N (Non-Integer Softmax)')
+    plt.legend()
+
+    plt.subplot(2, 2, 2)
+    plt.plot(N_range, integer_l2_differences, label='L2 Differences (Integer Softmax)')
+    plt.plot(N_range, fast_integer_l2_differences, label='L2 Differences (Fast Integer Softmax)')
+    plt.plot(N_range, partial_integer_l2_differences, label='L2 Differences (Partial Integer Softmax)')
+    plt.xlabel('N')
+    plt.ylabel('L2 Differences')
+    plt.title('Softmax L2 Differences for Different N (Integer Softmax)')
+    plt.legend()
+
+    plt.subplot(2, 2, 3)
+    plt.plot(N_range, l1_differences, label='L1 Differences (Fast Softmax)')
     plt.plot(N_range, partial_l1_differences, label='L1 Differences (Partial Softmax)')
     plt.xlabel('N')
-    plt.ylabel('Differences')
-    plt.title('Softmax Differences for Different N')
+    plt.ylabel('L1 Differences')
+    plt.title('Softmax L1 Differences for Different N (Non-Integer Softmax)')
     plt.legend()
+
+    plt.subplot(2, 2, 4)
+    plt.plot(N_range, integer_l1_differences, label='L1 Differences (Integer Softmax)')
+    plt.plot(N_range, fast_integer_l1_differences, label='L1 Differences (Fast Integer Softmax)')
+    plt.plot(N_range, partial_integer_l1_differences, label='L1 Differences (Partial Integer Softmax)')
+    plt.xlabel('N')
+    plt.ylabel('L1 Differences')
+    plt.title('Softmax L1 Differences for Different N (Integer Softmax)')
+    plt.legend()
+
+    plt.tight_layout()
     plt.savefig("plot.png")
 
 
