@@ -81,7 +81,7 @@ def util_main(**kwargs):
         import torch
         from quantlib.algorithms.pact.pact_ops import (
             PACTIntegerITAMax, PACTIntegerITAPartialMax, PACTITAMax,
-            PACTITAPartialMax)
+            PACTITAPartialMax,PACTIntegerSoftmax)
         input = torch.tensor(input_float).unsqueeze(0).float()
 
         ITAMax = PACTITAMax()
@@ -104,8 +104,6 @@ def util_main(**kwargs):
             None, input, torch.tensor(256)).detach().numpy().squeeze(axis=0)
         ITAPartialIntegerMax_softmax = PACTIntegerITAMax.MySoftmax.forward(
             None, input, torch.tensor(256)).detach().numpy().squeeze(axis=0)
-
-        print()
         print(f"=> L2 PyTorch Softmax Differences:")
         print(
             f"  Fast Softmax                 - ITAmax                       : {np.linalg.norm((fast_softmax-ITAmax_softmax)[0], 2):.3}"

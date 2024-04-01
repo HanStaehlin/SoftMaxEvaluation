@@ -1,13 +1,12 @@
 # ----------------------------------------------------------------------
 #
-# File: main.py
+# File: differences.py
 #
 # Last edited: 25.03.2024
 #
 # Copyright (C) 2024, ETH Zurich and University of Bologna.
 #
 # Author: Hannes Stählin (hstaehlin@ethz.ch), ETH Zurich
-#         Philip Wiese (wiesep@iis.ee.ethz.ch), ETH Zurich
 #
 # ----------------------------------------------------------------------
 # SPDX-License-Identifier: Apache-2.0
@@ -25,10 +24,11 @@
 # limitations under the License.
 
 import numpy as np
-from softmax_golden import fastSoftmax, realSoftmax, streamingPartialSoftmax, softermaxStep1, softermaxStep2
+from softmax_golden import fastSoftmax, realSoftmax, streamingPartialSoftmax, softermaxStep1, softermaxStep2, softermaxStep3
+import time
 import matplotlib.pyplot as plt
 
-def util_main(**kwargs):
+def run_softmax_comparisons(**kwargs):
     
 
     def calculate_differences(N_range):
@@ -53,22 +53,62 @@ def util_main(**kwargs):
         softermax_step2_l2_differences = []
         softermax_step2_l1_differences = []
 
+        softermax_l2_differences = []
+        softermax_l1_differences = []
+
         for N in N_range:
             A = np.random.randint(-128, 127, size=(1, N, N), dtype=np.int8)
             input_float = A * eps_max  # Assume eps is eps_max
             input_int = A
 
+            fast_softmax_start = time.time()
             fast_softmax = fastSoftmax(input_float, False)
+            fast_softmax_end = time.time()
+
+            fast_integer_softmax_start = time.time()
             fast_integer_softmax = fastSoftmax(input_int, True) / 255
+            fast_integer_softmax_end = time.time()
 
+            fast_partial_softmax_start = time.time()
             fast_partial_softmax = streamingPartialSoftmax(input_float, False)
+            fast_partial_softmax_end = time.time()
+
+            fast_partial_integer_softmax_start = time.time()
             fast_partial_integer_softmax = streamingPartialSoftmax(input_int, True) / 255
+            fast_partial_integer_softmax_end = time.time()
 
+            softmax_start = time.time()
             softmax = realSoftmax(input_float, False)
-            integer_softmax = realSoftmax(input_int, True) / 255
+            softmax_end = time.time()
 
+            integer_softmax_start = time.time()
+            integer_softmax = realSoftmax(input_int, True) / 255
+            integer_softmax_end = time.time()
+
+            softermax_step1_start = time.time()
             softermax_step1 = softermaxStep1(input_float, False)
+            softermax_step1_end = time.time()
+
+            softermax_step2_start = time.time()
             softermax_step2 = softermaxStep2(input_float, False)
+            softermax_step2_end = time.time()
+
+            softermax_start = time.time()
+            softermax = softermaxStep3(input_int, True) / 255
+            softermax_end = time.time()
+
+            print("###############")
+            print("N:", N)
+            print("Fast Softmax Time:", fast_softmax_end - fast_softmax_start)
+            print("Fast Integer Softmax Time:", fast_integer_softmax_end - fast_integer_softmax_start)
+            print("Fast Partial Softmax Time:", fast_partial_softmax_end - fast_partial_softmax_start)
+            print("Fast Partial Integer Softmax Time:", fast_partial_integer_softmax_end - fast_partial_integer_softmax_start)
+            print("Real Softmax Time:", softmax_end - softmax_start)
+            print("Real Integer Softmax Time:", integer_softmax_end - integer_softmax_start)
+            print("Softermax Step 1 Time:", softermax_step1_end - softermax_step1_start)
+            print("Softermax Step 2 Time:", softermax_step2_end - softermax_step2_start)
+            print("Softermax Time:", softermax_end - softermax_start)
+
 
             l2_diff = np.linalg.norm((softmax - fast_softmax)[0], 2)
             l1_diff = np.linalg.norm((softmax - fast_softmax)[0], 1)
@@ -84,6 +124,8 @@ def util_main(**kwargs):
             softermax_step1_l1_diff = np.linalg.norm((softmax - softermax_step1)[0], 1)
             softermax_step2_l2_diff = np.linalg.norm((softmax - softermax_step2)[0], 2)
             softermax_step2_l1_diff = np.linalg.norm((softmax - softermax_step2)[0], 1)
+            softermax_l2_diff = np.linalg.norm((softmax - softermax)[0], 2)
+            softermax_l1_diff = np.linalg.norm((softmax - softermax)[0], 1)
             
             l2_differences.append(l2_diff)
             l1_differences.append(l1_diff)
@@ -98,12 +140,14 @@ def util_main(**kwargs):
             softermax_step1_l2_differences.append(softermax_step1_l2_diff)
             softermax_step1_l1_differences.append(softermax_step1_l1_diff)
             softermax_step2_l2_differences.append(softermax_step2_l2_diff)
-            softermax_step2_l1_differences.append(softermax_step2_l1_diff)    
+            softermax_step2_l1_differences.append(softermax_step2_l1_diff)
+            softermax_l2_differences.append(softermax_l2_diff)
+            softermax_l1_differences.append(softermax_l1_diff)    
 
-        return l2_differences, l1_differences, partial_l2_differences, partial_l1_differences, integer_l2_differences, integer_l1_differences, fast_integer_l2_differences, fast_integer_l1_differences, partial_integer_l2_differences, partial_integer_l1_differences, softermax_step1_l2_differences, softermax_step1_l1_differences, softermax_step2_l2_differences, softermax_step2_l1_differences
+        return l2_differences, l1_differences, partial_l2_differences, partial_l1_differences, integer_l2_differences, integer_l1_differences, fast_integer_l2_differences, fast_integer_l1_differences, partial_integer_l2_differences, partial_integer_l1_differences, softermax_step1_l2_differences, softermax_step1_l1_differences, softermax_step2_l2_differences, softermax_step2_l1_differences, softermax_l2_differences, softermax_l1_differences
 
     N_range = [16,32,64, 128, 256, 512, 1024, 2048]
-    l2_differences, l1_differences, partial_l2_differences, partial_l1_differences, integer_l2_differences, integer_l1_differences, fast_integer_l2_differences, fast_integer_l1_differences, partial_integer_l2_differences, partial_integer_l1_differences, softermax_step1_l2_differences, softermax_step1_l1_differences, softermax_step2_l2_differences, softermax_step2_l1_differences = calculate_differences(N_range)
+    l2_differences, l1_differences, partial_l2_differences, partial_l1_differences, integer_l2_differences, integer_l1_differences, fast_integer_l2_differences, fast_integer_l1_differences, partial_integer_l2_differences, partial_integer_l1_differences, softermax_step1_l2_differences, softermax_step1_l1_differences, softermax_step2_l2_differences, softermax_step2_l1_differences, softermax_l2_differences, softermax_l1_differences = calculate_differences(N_range)
 
     print("Fast L2 Differences:", l2_differences)
     print("Fast L1 Differences:", l1_differences)
@@ -119,6 +163,9 @@ def util_main(**kwargs):
     print("Softermax Step 1 L1 Differences:", softermax_step1_l1_differences)
     print("Softermax Step 2 L2 Differences:", softermax_step2_l2_differences)
     print("Softermax Step 2 L1 Differences:", softermax_step2_l1_differences)
+    print("Softermax L2 Differences:", softermax_l2_differences)
+    print("Softermax L1 Differences:", softermax_l1_differences)
+
     plt.figure(figsize=(12, 12))
 
     plt.subplot(2, 2, 1)
@@ -135,6 +182,7 @@ def util_main(**kwargs):
     plt.plot(N_range, integer_l2_differences, label='L2 Differences (Integer Softmax)')
     plt.plot(N_range, fast_integer_l2_differences, label='L2 Differences (Fast Integer Softmax)')
     plt.plot(N_range, partial_integer_l2_differences, label='L2 Differences (Partial Integer Softmax)')
+    plt.plot(N_range, softermax_l2_differences, label='L2 Differences (Softermax)')
 
     plt.xlabel('N')
     plt.ylabel('L2 Differences')
@@ -155,6 +203,7 @@ def util_main(**kwargs):
     plt.plot(N_range, integer_l1_differences, label='L1 Differences (Integer Softmax)')
     plt.plot(N_range, fast_integer_l1_differences, label='L1 Differences (Fast Integer Softmax)')
     plt.plot(N_range, partial_integer_l1_differences, label='L1 Differences (Partial Integer Softmax)')
+    plt.plot(N_range, softermax_l1_differences, label='L1 Differences (Softermax)')
     plt.xlabel('N')
     plt.ylabel('L1 Differences')
     plt.title('Softmax L1 Differences for Different N (Integer Softmax)')
@@ -163,5 +212,5 @@ def util_main(**kwargs):
     plt.tight_layout()
     plt.savefig("plot.png")
 
-
-util_main()
+if __name__ == "__main__":
+  run_softmax_comparisons()
