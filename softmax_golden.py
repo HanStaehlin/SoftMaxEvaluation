@@ -24,7 +24,7 @@
 # limitations under the License.
 
 import numpy as np
-
+import torch
 
 def fastSoftmax(x, integerize = True):
     if not integerize:
@@ -210,3 +210,92 @@ def realSoftmax(A_requant, integerize = True):
         return (exp / exp.sum(axis = 2).reshape(n_heads, -1, 1) * (2**7 - 1)).astype(A_requant.dtype)
     else:
         return exp / exp.sum(axis = 2).reshape(n_heads, -1, 1)
+
+
+def softermaxStep1(A_requant, integerize = True):
+    # Get the number of heads
+    n_heads = A_requant.shape[-3]
+
+    # Define the number of bits
+    B = 8
+
+    # Calculate the logarithm of the base e
+    log2e = np.log2(np.exp(1))
+
+    # Calculate the scaling factor
+    eps_x = B / (2**B * log2e)
+
+    # Scale the input values if integerize is True
+    if integerize:
+        x = A_requant * eps_x
+    else:
+        x = A_requant.astype(np.float64)
+    
+    # Calculate the exponential values
+    exp = 2**(x - np.max(x, axis = 2).reshape(n_heads, -1, 1))
+
+    # Normalize the exponential values to get the softmax probabilities
+    if integerize:
+        # Scale the probabilities to the range [0, 2^7 - 1]
+        return (exp / exp.sum(axis = 2).reshape(n_heads, -1, 1) * (2**7 - 1)).astype(A_requant.dtype)
+    else:
+        return exp / exp.sum(axis = 2).reshape(n_heads, -1, 1)
+    
+def softermaxStep2(A_requant, integerize = True):
+    # Get the number of heads
+    n_heads = A_requant.shape[-3]
+
+    # Define the number of bits
+    B = 8
+
+    # Calculate the logarithm of the base e
+    log2e = np.log2(np.exp(1))
+
+    # Calculate the scaling factor
+    eps_x = B / (2**B * log2e)
+
+    # Scale the input values if integerize is True
+    if integerize:
+        x = A_requant * eps_x
+    else:
+        x = A_requant.astype(np.float64)
+    
+    max_values = -np.inf * np.ones((n_heads, x.shape[1], x.shape[2]))
+    exp_result = np.zeros((n_heads, x.shape[1], x.shape[2]))
+    sum = 0
+    
+    # Calculate the exponential values
+    # Loop over each head
+    for i in range(n_heads):
+        # Loop over each row
+        for j in range(x.shape[1]):
+            # Loop over each element in the row
+            max_val = x[i, j, 0]
+            for k in range(x.shape[2]):
+                # Calculate the exponentiation
+                if x[i, j, k] > max_val:
+                    max_val = x[i, j, k]
+                max_values[i, j, k] = max_val
+                if(k==0):
+                    exp_result[i, j, k] = 1
+                    sum = exp_result[i, j, k]
+                else:
+                    exp_result[i, j, k] = 2 ** (max_values[i, j, k-1] - max_values[i, j, k])
+                    sum = exp_result[i, j, k] + sum * 2 ** (max_values[i, j, k] - max_values[i, j, k - 1])
+
+    #ÇNormalize the exponential values to get the softmax probabilities
+    # Loop over each head
+    for i in range(n_heads):
+        # Loop over each row
+        for j in range(x.shape[1]):
+            # Loop over each element in the row
+            for k in range(x.shape[2]):
+                exp_result[i, j, k] = exp_result[i, j, k]* 2**(max_values[i, j, k] - max_values[i, j, -1]) / sum
+
+
+    # Normalize the exponential values to get the softmax probabilities
+    if integerize:
+        # Scale the probabilities to the range [0, 2^7 - 1]
+        return  exp_result * (2**7 - 1).astype(A_requant.dtype)
+    else:
+        return exp_result
