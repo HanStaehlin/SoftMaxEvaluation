@@ -24,7 +24,7 @@
 # limitations under the License.
 
 import numpy as np
-from softmax_golden import fastSoftmax, realSoftmax, streamingPartialSoftmax, softermaxStep1, softermaxStep2, softermaxStep3
+from softmax_versions import fastSoftmax, realSoftmax, streamingPartialSoftmax, softermaxStep1, softermaxStep2, softermaxStep3
 import time
 import matplotlib.pyplot as plt
 

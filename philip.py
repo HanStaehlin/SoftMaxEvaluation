@@ -25,7 +25,7 @@
 # limitations under the License.
 
 import numpy as np
-from softmax_golden import fastSoftmax, realSoftmax, streamingPartialSoftmax
+from softmax_versions import fastSoftmax, realSoftmax, streamingPartialSoftmax
 
 
 def util_main(**kwargs):
