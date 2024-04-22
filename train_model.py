@@ -1,3 +1,4 @@
+import torch
 from datasets import load_dataset
 from transformers import AutoTokenizer
 from transformers import DataCollatorWithPadding
@@ -37,11 +38,11 @@ def compute_metrics(eval_pred):
 id2label = {0: "NEGATIVE", 1: "POSITIVE"}
 label2id = {"NEGATIVE": 0, "POSITIVE": 1}
 
-
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 model = AutoModelForSequenceClassification.from_pretrained(
     "google/mobilebert-uncased", num_labels=2, id2label=id2label, label2id=label2id
-)
+).to(device)
 
 training_args = TrainingArguments(
     output_dir="./transformers_model",
