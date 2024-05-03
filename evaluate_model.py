@@ -6,7 +6,7 @@ from datasets import load_dataset
 from torch.fx import GraphModule
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-from transformers.utils.fx import symbolic_trace
+from transformers.utils.fx import symbolic_trace, get_concrete_args
 
 
 from transformers import MobileBertTokenizer, MobileBertForSequenceClassification, MobileBertConfig
@@ -39,7 +39,9 @@ from quantlib.algorithms.pact.pact_ops import (PACTITAMax,
                                                PACTUnsignedAct,
                                                PACTITAPartialMax)
 
-N_LEVELS_ACTS = 2**8
+from fx import HFLeafTracer, SimpleInterpreter
+
+N_LEVELS_ACTS = 2**64
 UPPER_PERCENTILE = 99.9
 LOWER_PERCENTILE = 0.1
 EPOCHS = 4
@@ -51,7 +53,7 @@ epsSchedule = {(EPOCHS - 2): 'start'}
 
 softmax_cfg = {
     "mode": "I-BERT",
-    "n_levels": 2**12,
+    "n_levels": N_LEVELS_ACTS,
     "init_clip": "max",
     "leaky": 0.0,
     "learn_clip": True,
@@ -94,7 +96,7 @@ def eval_model(model = MobileBertForSequenceClassification.from_pretrained("Alir
 
 def quantize_softmax(model_name="Alireza1044/mobilebert_sst2",
                      dataset_name="sst2",
-                     n_train=128,
+                     n_train=1,
                      n_test=128,
                      batch_size=4,
                      epochs=1,
@@ -141,7 +143,9 @@ def quantize_softmax(model_name="Alireza1044/mobilebert_sst2",
     traced = symbolic_trace(
         model,
         input_names=["input_ids", "attention_mask", "token_type_ids"],
+        tracer_cls=HFLeafTracer,
     )
+
 
     nodes_list = qlw.LightweightGraph.build_nodes_list(
         traced, leaf_types=PACT_OPS_INCLUSIVE)
@@ -167,6 +171,12 @@ def quantize_softmax(model_name="Alireza1044/mobilebert_sst2",
 
     traced = ApproximateSoftmaxPass(**softmax_cfg).apply(traced)
 
+    # traced = symbolic_trace(
+    #     traced,
+    #     input_names=["input_ids", "attention_mask", "token_type_ids"],
+    #     tracer_cls=HFLeafTracer,
+    # )
+    # traced.graph.print_tabular()
     print("=== Quantized Model ===")
     nodes_list = qlw.LightweightGraph.build_nodes_list(
         traced, leaf_types=PACT_OPS_INCLUSIVE)
@@ -301,6 +311,8 @@ def train_activations(n_train, n_test, batch_size, sst2, device, traced):
                 print(
                     f' Train [{epoch+1:02d}/{EPOCHS:02d}] -- Accuracy: {accuracy:.4f}'
                 )
+
+
 
 
 model = quantize_softmax()
