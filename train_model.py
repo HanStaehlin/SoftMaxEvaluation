@@ -10,8 +10,6 @@ sst2 = load_dataset("sst2")
 
 print(sst2["train"][0])
 
-
-
 tokenizer = AutoTokenizer.from_pretrained("google/mobilebert-uncased")
 
 def preprocess_function(examples):
@@ -19,16 +17,9 @@ def preprocess_function(examples):
 
 tokenized_imdb = sst2.map(preprocess_function, batched=True)
 
-
-
 data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
 
-
-
 accuracy = evaluate.load("accuracy")
-
-
-
 
 def compute_metrics(eval_pred):
     predictions, labels = eval_pred
