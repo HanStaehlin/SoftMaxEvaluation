@@ -27,7 +27,7 @@ class ApproximateSoftmaxPass(SequentialPass):
         if mode=='I-BERT':
             replacement_class = nn.Sequential(PACTUnsignedAct(**kwargs),PACTSoftmax())
         elif mode=='ITA':
-            replacement_class = PACTITAMax()
+            replacement_class = nn.Sequential(PACTUnsignedAct(**kwargs),PACTITAMax())
         elif mode=='ITA-Partial':
             replacement_class = PACTITAPartialMax()
         else:
