@@ -33,6 +33,7 @@ import quantlib.editing.fx as qlfx
 import quantlib.algorithms as qla
 from quantlib.editing.fx.passes.pact import PACTInclusiveTracer, PACT_symbolic_trace, PACT_OPS, PACT_OPS_INCLUSIVE
 from quantlib.editing.fx.passes.general import ModularizeActivationsPass
+from quantlib.editing.fx.passes.pact.integerize import IntegerizeSoftmaxPass, IntegerizePACTNetPass
 from quantlib.editing.fx.util.tracing import LeafTracer, custom_symbolic_trace
 from quantlib.editing.lightweight.rules.filters import NameFilter
 from quantlib.algorithms.pact.pact_ops import (PACTITAMax,
@@ -44,18 +45,18 @@ from quantlib.algorithms.pact.pact_ops import (PACTITAMax,
 from fx import HFLeafTracer, SimpleInterpreter
 
 # Hyperparameters
-N_LEVELS_ACTS = 2**8
+N_LEVELS_ACTS = 2**16
 UPPER_PERCENTILE = 99.9
 LOWER_PERCENTILE = 0.1
 EPOCHS = 4
-num_layers = 4
+num_layers = 1
 schedule = {1: "start", (EPOCHS - 1): ["freeze"]}
 actSchedule = {1: "start", (EPOCHS - 1): ["freeze"]}
 epsSchedule = {(EPOCHS - 2): 'start'}
 
 
 softmax_cfg = {
-    "mode": "I-BERT",
+    "mode": "ITA",
     "n_levels": N_LEVELS_ACTS,
     "init_clip": "max",
     "leaky": 0.0,
@@ -65,19 +66,10 @@ softmax_cfg = {
     "rounding": True,
     "tqt": True,
     "upper_percentile": UPPER_PERCENTILE,
-    "act_kind": "identity"
+    "act_kind": "identity",
+
 }
-consmax_cfg = {
-    "mode": "consmax",
-    "n_levels": N_LEVELS_ACTS,
-    "init_clip": "max",
-    "leaky": 0.0,
-    "learn_clip": True,
-    "lower_percentile": LOWER_PERCENTILE,
-    "num_bins": 2**12,
-    "rounding": True,
-    "tqt": True,
-}
+
 
 
 
@@ -85,7 +77,7 @@ def eval_model(model=MobileBertForSequenceClassification.from_pretrained(
     "Alireza1044/mobilebert_sst2")):
     sst2_dataset = load_dataset("sst2")
     evaluate_dataset = sst2_dataset["validation"]
-
+    model.eval()
     tokenizer = MobileBertTokenizer.from_pretrained(
         "Alireza1044/mobilebert_sst2")
     # print(MobileBertConfig())
@@ -113,9 +105,9 @@ def eval_model(model=MobileBertForSequenceClassification.from_pretrained(
 
 def quantize_softmax(model_name="Alireza1044/mobilebert_sst2",
                      dataset_name="sst2",
-                     n_train=4,
+                     n_train=6,
                      n_test=128,
-                     batch_size=128,
+                     batch_size=1,
                      epochs=1,
                      verbose=0):
 
@@ -163,6 +155,8 @@ def quantize_softmax(model_name="Alireza1044/mobilebert_sst2",
     )
     htraced = ModularizeActivationsPass().apply(htraced)
     htraced = ApproximateSoftmaxPass(**softmax_cfg).apply(htraced)
+    #htraced = IntegerizeSoftmaxPass(**softmax_cfg).apply(htraced)
+
 
     stateDict = model.state_dict()
     modelConf = model.config
@@ -210,7 +204,16 @@ def quantize_softmax(model_name="Alireza1044/mobilebert_sst2",
     mobileBertModel = MobileBertModel(modelConf)
     model = MobileBertEncoder(modelConf)  # JUNGVI: First Quantize the encoder
     model.load_state_dict(stateDict, strict=False)
+
     model.eval()
+    for MBertLayer in model.layer:
+        MBertLayer.attention.output.LayerNorm = torch.nn.Identity()
+        MBertLayer.output.LayerNorm = torch.nn.Identity()
+        MBertLayer.output.bottleneck.LayerNorm = torch.nn.Identity()
+        MBertLayer.bottleneck.input.LayerNorm = torch.nn.Identity()
+        MBertLayer.bottleneck.attention.LayerNorm = torch.nn.Identity()
+        for ffnLayer in MBertLayer.ffn:
+            ffnLayer.output.LayerNorm = torch.nn.Identity()
 
     embedder = MobileBertEmbeddings(modelConf)
 
@@ -244,7 +247,6 @@ def quantize_softmax(model_name="Alireza1044/mobilebert_sst2",
     fakeBatch[1][fakeBatch[1] != 0] = -256 // 2
 
     # goldenOutput = model(fakeBatch[0], fakeBatch[1], train_batch_head_mask)
-
     print("[MobileBERT] ======= Step 1 : Trace Model =======")
 
     torch._dynamo.reset()
@@ -278,63 +280,25 @@ def quantize_softmax(model_name="Alireza1044/mobilebert_sst2",
     gm.recompile()
 
     traced = gm
-    nodes_list = qlw.LightweightGraph.build_nodes_list(
-        traced, leaf_types=PACT_OPS_INCLUSIVE)
 
     print("=== Original Model ===")
-    for lwn in nodes_list:
-        print("    {:30s} {}".format(lwn.name, lwn.type_))
-    print()
+    traced.graph.print_tabular()
 
     print(type(model), type(traced))
-    _passes = []
-    # _passes.append()
-    _passes.append(ApproximateSoftmaxPass(**softmax_cfg))
-    traced = ModularizeActivationsPass().apply(traced)
+
     print("=== Modularize Activations ===")
-    nodes_list = qlw.LightweightGraph.build_nodes_list(
-        traced, leaf_types=PACT_OPS_INCLUSIVE)
-    for lwn in nodes_list:
-        print("    {:30s} {}".format(lwn.name, lwn.type_))
-    print()
-
-    traced = ApproximateSoftmaxPass(**softmax_cfg).apply(traced)
-
-    # traced = symbolic_trace(
-    #     traced,
-    #     input_names=["input_ids", "attention_mask", "token_type_ids"],
-    #     tracer_cls=HFLeafTracer,
-    # )
-
-    print("=== Quantized Model ===")
-
-    # torch._dynamo.reset()
-    # graphs: List[torch.fx.GraphModule] = []
-
-    # for param in model.parameters():
-    #     param.requires_grad = False
-
-    # try:
-    #     model_fn = torch.compile(backend=partial(dynamo_graph_extract_compiler,
-    #                                              model),
-    #                              dynamic=False)(model)
-    #     _ = model_fn(fakeBatch[0], fakeBatch[1], train_batch_head_mask)
-    # except Exception as e:
-    #     print("[MobileBERT] === PyTorch Network (non-tracable) ===\n", model)
-    #     print("[MobileBERT] === Error ===\n", e)
-    #     if verbose > 0:
-    #         traceback.print_exc()
-    #     import IPython
-    #     IPython.embed()
-    #     exit(-1)
-
-    # gm = graphs[0]
-    # gm.graph.eliminate_dead_code()
-    # gm.recompile()
-    # htraced = HFLeafTracer(htraced)
-    nodes_list = qlw.LightweightGraph.build_nodes_list(
-        traced, leaf_types=PACT_OPS_INCLUSIVE)
+    traced = ModularizeActivationsPass().apply(traced)
     traced.graph.print_tabular()
+
+    print("=== Exchange Softmax ===")
+    traced = ApproximateSoftmaxPass(**softmax_cfg).apply(traced)
+    traced_approx = copy.deepcopy(traced)
+    SOFTMAX_EVAL_PACT_OPS = PACT_OPS
+    SOFTMAX_EVAL_Tracer = LeafTracer(leaf_types=list(SOFTMAX_EVAL_PACT_OPS))
+    SOFTMAX_EVAL_PACT_symbolic_trace = partial(custom_symbolic_trace,
+                                               tracer=SOFTMAX_EVAL_Tracer)
+    traced_approx = SOFTMAX_EVAL_PACT_symbolic_trace(traced_approx)
+    traced_approx.graph.print_tabular()
 
     train_activations(n_train, n_test, batch_size, sst2, device, htraced)
     # print(traced)
@@ -392,7 +356,7 @@ def train_activations(n_train, n_test, batch_size, sst2, device, traced):
 
     for epoch in range(EPOCHS):
         actController.step_pre_training_epoch(epoch, optimizer)
-
+        traced.train()
         correct = 0
         total = 0
         eps_in = 1
@@ -409,11 +373,12 @@ def train_activations(n_train, n_test, batch_size, sst2, device, traced):
                 actController.step_pre_training_batch(epoch, optimizer)
                 outputs_list = [None] * len(input_batch)
                 predicted_list = [None] * len(input_batch)
-
+                si = SimpleInterpreter(traced)
                 for i in range(len(input_batch)):
                     outputs_list[i] = traced(**input_batch[i])["logits"]
                     _, predicted_list[i] = torch.max(outputs_list[i], 1)
-
+                    #si.propagate(traced, **input_batch[i])
+                print(outputs_list)
                 total += label_batch.size(0)
                 correct += (
                     torch.tensor(predicted_list) == label_batch).sum().item()
@@ -421,9 +386,9 @@ def train_activations(n_train, n_test, batch_size, sst2, device, traced):
 
                 loss = loss_fn(torch.cat(outputs_list, dim=0), label_batch)
 
-                optimizer.zero_grad()  # clear gradients
-                loss.backward()  # gradient computation
-                optimizer.step()  # gradient descent
+                # optimizer.zero_grad()  # clear gradients
+                # loss.backward()  # gradient computation
+                # optimizer.step()  # gradient descent
 
                 pbar_batch.set_description(
                     f'Train [{epoch+1:02d}/{EPOCHS:02d}] -- Loss: {loss.item():.4f}, Accuracy: {accuracy:.4f}, Batch'
@@ -452,20 +417,21 @@ def train_activations(n_train, n_test, batch_size, sst2, device, traced):
 # # Visualize the results
 # fig, axs = plt.subplots(len(results), sharex=True, figsize=(10, 8))
 # for i, result in enumerate(results):
-#     axs[i].plot([1, 4, 8, 16, 32], result, label=f"{2**(i+2)} bits")
-#     axs[i].set_title(f"Performance with {2**(i+2)} bits")
+#     axs[i].plot([1, 4, 8, 16, 32], result, label=f"{2**(i)} bits")
+#     axs[i].set_title(f"Performance with {2**(i)} bits")
 #     axs[i].set_xlabel("Number of Training Examples")
 #     axs[i].set_ylabel("Evaluation Result")
 #     axs[i].legend()
 
-# # Save the visualization to a file
+#Save the visualization to a file
 # plt.tight_layout()
-# plt.savefig("results_visualization.png")
+# plt.savefig("results_visualization_without_tqt.png")
 # plt.show()
 
 model = quantize_softmax()
-print("Evaluating quantized model...")
 
+print("Evaluating quantized model...")
+print(softmax_cfg["mode"])
 eval_model(model)
 print("Evaluating unquantized model...")
 eval_model()
