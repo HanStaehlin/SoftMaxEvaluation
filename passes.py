@@ -35,7 +35,7 @@ dequant_cfg = {
 
 class Observer(nn.Module):
     """
-    The model class, which defines our classifier.
+    Identity, model that can be used for debugging.
     """
 
     def __init__(self, name: Optional[str] = None):

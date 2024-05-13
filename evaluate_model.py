@@ -23,8 +23,8 @@ from typing import Callable, List, Literal
 from passes import ApproximateSoftmaxPass
 from optimum.fx.optimization import Transformation
 from utils import print_tabular, _getAdhocEpsList, roundTensors, delistify, OutputProjectionITA, getMAEPercent
-
-
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, matthews_corrcoef
+from scipy.stats import pearsonr
 ############### QuantLib Imports ###############################################
 import quantlib.backends.deeploy as deeploy
 import quantlib.editing.lightweight as qlw
@@ -43,9 +43,10 @@ from quantlib.algorithms.pact.pact_ops import (PACTITAMax,
                                                PACTITAPartialMax)
 
 from fx import HFLeafTracer, SimpleInterpreter
+from torch.nn import CrossEntropyLoss, MSELoss, BCEWithLogitsLoss
 
 # Hyperparameters
-N_LEVELS_ACTS = 2**16
+N_LEVELS_ACTS = 2**8
 UPPER_PERCENTILE = 99.9
 LOWER_PERCENTILE = 0.1
 EPOCHS = 4
@@ -55,8 +56,100 @@ actSchedule = {1: "start", (EPOCHS - 1): ["freeze"]}
 epsSchedule = {(EPOCHS - 2): 'start'}
 
 
+def pearson_correlation(y_true, y_pred):
+    # Pearson correlation expects two arrays of the same length
+    # `pearsonr` returns a tuple (correlation, p-value), so we extract just the correlation part
+    correlation, _ = pearsonr(y_true, y_pred)
+    return correlation
+
+
+metrics = {
+    "accuracy": accuracy_score,
+    "precision": precision_score,
+    "recall": recall_score,
+    "f1": f1_score,
+    "mcc": matthews_corrcoef,  # Matthews Correlation Coefficient
+    "pearson": pearson_correlation,
+}
+
+loss_functions = {
+    'cola': CrossEntropyLoss(),   # CoLA might be better with a binary cross-entropy loss
+    'sst2': CrossEntropyLoss(),   # SST-2 is a binary classification (positive/negative)
+    'mrpc': CrossEntropyLoss(),   # MRPC is also a binary classification task
+    'stsb': MSELoss(),            # STS-B requires a regression loss
+    'mnli': CrossEntropyLoss(),   # MNLI involves multi-class classification
+    'qnli': CrossEntropyLoss(),   # QNLI is a binary classification task
+    'qqp': CrossEntropyLoss(),    # QQP can be approached with binary classification as well 
+    'rte': CrossEntropyLoss(),    # RTE is binary classification
+    'wnli': CrossEntropyLoss(),   # WNLI is also binary classification
+    'ax': CrossEntropyLoss(),     # AX (diagnostic task) depending on setup might need cross-entropy
+}
+
+model_dataset_configs = {
+    "mobilebert_sst2": {
+        "model_name": "Alireza1044/mobilebert_sst2",
+        "dataset_name": "sst2",
+        "tokenizer": "Alireza1044/mobilebert_sst2",
+        "metrics": "accuracy",  # Since SST2 is about sentiment classification
+    },
+    "mobilebert_cola": {
+        "model_name": "Alireza1044/mobilebert_cola",
+        "dataset_name": "cola",
+        "tokenizer": "Alireza1044/mobilebert_cola",
+        "metrics": "mcc",  # MCC is recommended for CoLA
+    },
+    "mobilebert_mnli": {
+        "model_name": "Alireza1044/mobilebert_mnli",
+        "dataset_name": "mnli",
+        "tokenizer": "Alireza1044/mobilebert_mnli",
+        "metrics": "accuracy",  # MNLI involves textual entailment
+    },
+    "mobilebert_mrpc": {
+        "model_name": "Alireza1044/mobilebert_mrpc",
+        "dataset_name": "mrpc",
+        "tokenizer": "Alireza1044/mobilebert_mrpc",
+        "metrics": "f1",  # MRPC often uses F1 score
+    },
+    "mobilebert_qnli": {
+        "model_name": "Alireza1044/mobilebert_qnli",
+        "dataset_name": "qnli",
+        "tokenizer": "Alireza1044/mobilebert_qnli",
+        "metrics": "accuracy",  # QNLI is a binary classification task
+    },
+    "mobilebert_qqp": {
+        "model_name": "Alireza1044/mobilebert_qqp",
+        "dataset_name": "qqp",
+        "tokenizer": "Alireza1044/mobilebert_qqp",
+        "metrics": "f1",  # QQP also often uses F1 score for evaluation
+    },
+    "mobilebert_rte": {
+        "model_name": "Alireza1044/mobilebert_rte",
+        "dataset_name": "rte",
+        "tokenizer": "Alireza1044/mobilebert_rte",
+        "metrics": "accuracy",  # RTE is a smaller entailment dataset
+    },
+    "mobilebert_stsb": {
+        "model_name": "Alireza1044/mobilebert_stsb",
+        "dataset_name": "stsb",
+        "tokenizer": "Alireza1044/mobilebert_stsb",
+        "metrics": "pearson",  # STS-B uses Pearson correlation
+    },
+    "mobilebert_wnli": { # No Model available
+        "model_name": "Alireza1044/mobilebert_wnli",
+        "dataset_name": "wnli",
+        "tokenizer": "Alireza1044/mobilebert_wnli",
+        "metrics": "accuracy",  # WNLI is based on correct pronoun resolution
+    },
+    "mobilebert_ax": { # Not a standard dataset, but a diagnostic set for MNLI
+        "model_name": "Alireza1044/mobilebert_multinli",
+        "dataset_name": "ax",
+        "tokenizer": "Alireza1044/mobilebert_multinli",
+        "metrics": "accuracy",  # AX is an analysis set for MNLI
+    }
+}
+
 softmax_cfg = {
-    "mode": "ITA",
+    "mode": "I-BERT",
     "n_levels": N_LEVELS_ACTS,
     "init_clip": "max",
     "leaky": 0.0,
@@ -73,75 +166,84 @@ softmax_cfg = {
 
 
 
-def eval_model(model=MobileBertForSequenceClassification.from_pretrained(
-    "Alireza1044/mobilebert_sst2")):
-    sst2_dataset = load_dataset("sst2")
-    evaluate_dataset = sst2_dataset["validation"]
+
+
+
+def eval_model(config, model=None):
+    if model is None:
+        model = MobileBertForSequenceClassification.from_pretrained(config['model_name'])
     model.eval()
-    tokenizer = MobileBertTokenizer.from_pretrained(
-        "Alireza1044/mobilebert_sst2")
-    # print(MobileBertConfig())
-    correct_predictions = 0
-    total_examples = len(evaluate_dataset)
 
-    for example in evaluate_dataset:
-        inputs = tokenizer(example["sentence"], return_tensors="pt")
+    # Load the appropriate dataset
+    dataset_name = config['dataset_name']
+    tokenizer = MobileBertTokenizer.from_pretrained(config['tokenizer'])
+    dataset = load_dataset("nyu-mll/glue", dataset_name)
+
+    # Select the appropriate validation set
+    if dataset_name == "mnli":
+        evaluate_dataset = dataset["validation_matched"].select(range(200))
+    else:
+        evaluate_dataset = dataset["validation"].select(range(200))
+
+    predictions, labels = [], []
+    for example in tqdm(evaluate_dataset, desc="Evaluating"):
+        # Prepare inputs based on the dataset type
+        if dataset_name in ["cola", "sst2"]:
+            inputs = tokenizer(example["sentence"], return_tensors="pt", padding=True, truncation=True)
+        elif dataset_name in ["mrpc", "stsb", "rte", "wnli"]:
+            inputs = tokenizer(example["sentence1"], example["sentence2"], return_tensors="pt", padding=True, truncation=True)
+        elif dataset_name in ["qqp"]:
+            inputs = tokenizer(example["question1"], example["question2"], return_tensors="pt", padding=True, truncation=True)
+        elif dataset_name in ["qnli"]:
+            inputs = tokenizer(example["question"], example["sentence"], return_tensors="pt", padding=True, truncation=True)
+        elif dataset_name in ["mnli", "mnli_matched", "mnli_mismatched", "ax"]:
+            inputs = tokenizer(example["premise"], example["hypothesis"], return_tensors="pt", padding=True, truncation=True)
+
         with torch.no_grad():
-            logits = model(**inputs)["logits"]
+            outputs = model(**inputs)
+            logits = outputs["logits"]
+            predicted_class_id = logits.argmax(dim=-1).item()
 
-        predicted_class_id = logits.argmax().item()
-        predicted_label = model.config.id2label[predicted_class_id]
-        true_label = example["label"]
+        predictions.append(predicted_class_id)
+        labels.append(example["label"])
 
-        if predicted_class_id == true_label:
-            correct_predictions += 1
-
-    accuracy = correct_predictions / total_examples
-    print("Accuracy:", accuracy)
-    return accuracy
-
+    # Calculate the selected metric
+    selected_metric_key = config['metrics']
+    selected_metric = metrics[selected_metric_key]
+    result = selected_metric(labels, predictions)
+    print(f"{selected_metric_key.capitalize()}:", result)
+    return result
 
 
 
-def quantize_softmax(model_name="Alireza1044/mobilebert_sst2",
-                     dataset_name="sst2",
-                     n_train=6,
+
+def quantize_softmax(config,
+                     n_train=1,
                      n_test=128,
                      batch_size=1,
                      epochs=1,
                      verbose=0):
+    model = MobileBertForSequenceClassification.from_pretrained(config['model_name'])
+    dataset_name = config['dataset_name']
+    tokenizer_name = config['tokenizer']
 
+    dataset = load_dataset("nyu-mll/glue",dataset_name)
+    tokenizer = MobileBertTokenizer.from_pretrained(tokenizer_name)
     # Load dataset
-    sst2 = load_dataset("stanfordnlp/sst2")
 
-    print(sst2["train"][0])
+    print(dataset["train"][0])
 
-    tokenizer = MobileBertTokenizer.from_pretrained(
-        "Alireza1044/mobilebert_sst2")
-
-    def preprocess_function(examples):
-        return tokenizer(examples["sentence"], truncation=True)
-
-    tokenized_sst2 = sst2.map(preprocess_function, batched=True)
-    print(tokenized_sst2['train'][0])
-    data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
-    accuracy = evaluate.load("accuracy")
-
-    def compute_metrics(eval_pred):
-        predictions, labels = eval_pred
-        predictions = np.argmax(predictions, axis=1)
-        return accuracy.compute(predictions=predictions, references=labels)
+    # def compute_metrics(eval_pred):
+    #     predictions, labels = eval_pred
+    #     predictions = np.argmax(predictions, axis=1)
+    #     return accuracy.compute(predictions=predictions, references=labels)
 
     id2label = {0: "NEGATIVE", 1: "POSITIVE"}
     label2id = {"NEGATIVE": 0, "POSITIVE": 1}
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    model = MobileBertForSequenceClassification.from_pretrained(
-        "Alireza1044/mobilebert_sst2",
-        num_labels=2,
-        id2label=id2label,
-        label2id=label2id).to(device)
+    model = MobileBertForSequenceClassification.from_pretrained(config['model_name']).to(device)
 
     # Trace model
 
@@ -222,14 +324,14 @@ def quantize_softmax(model_name="Alireza1044/mobilebert_sst2",
                                   batch_size=batch_size,
                                   collate_fn=partial(_collate_fn,
                                                      device=device))
-    dataloader_test = DataLoader(dataset_test,
-                                 batch_size=batch_size,
-                                 collate_fn=partial(_collate_fn,
-                                                    device=device))
+    # dataloader_test = DataLoader(dataset_test,
+    #                              batch_size=batch_size,
+    #                              collate_fn=partial(_collate_fn,
+    #                                                 device=device))
 
     # Get sample batch
     train_batch = next(iter(dataloader_train))
-    test_batch = next(iter(dataloader_test))
+    #test_batch = next(iter(dataloader_test))
 
     train_batch_embed = embedder(
         input_ids=train_batch[1].type(torch.LongTensor))
@@ -300,58 +402,56 @@ def quantize_softmax(model_name="Alireza1044/mobilebert_sst2",
     traced_approx = SOFTMAX_EVAL_PACT_symbolic_trace(traced_approx)
     traced_approx.graph.print_tabular()
 
-    train_activations(n_train, n_test, batch_size, sst2, device, htraced)
+    train_activations(config, n_train, n_test, batch_size, dataset, device, htraced)
     # print(traced)
 
     return htraced
 
+def _collate_fn(batch, tokenizer, task_type):
+    if task_type in ['sst2', 'cola']:  # Tasks with a single sentence input
+        batch_inputs = tokenizer([item["sentence"] for item in batch],
+                                 return_tensors="pt", padding=True, truncation=True)
+    elif task_type in ['mrpc', 'stsb', 'rte', 'wnli']:  # Tasks with two sentences
+        batch_inputs = tokenizer([item["sentence1"] for item in batch],
+                                 [item["sentence2"] for item in batch],
+                                 return_tensors="pt", padding=True, truncation=True)
+    elif task_type in ['qqp']:  # Tasks with two questions
+        batch_inputs = tokenizer([item["question1"] for item in batch],
+                                 [item["question2"] for item in batch],
+                                 return_tensors="pt", padding=True, truncation=True)
+    elif task_type in ['mnli', 'mnli_matched', 'mnli_mismatched', 'ax']:  # Tasks with premise and hypothesis
+        batch_inputs = tokenizer([item["premise"] for item in batch],
+                                 [item["hypothesis"] for item in batch],
+                                 return_tensors="pt", padding=True, truncation=True)
+    elif task_type == 'qnli':  # QNLI with question and context sentence
+        batch_inputs = tokenizer([item["question"] for item in batch],
+                                 [item["sentence"] for item in batch],
+                                 return_tensors="pt", padding=True, truncation=True)
 
-def train_activations(n_train, n_test, batch_size, sst2, device, traced):
+    labels = torch.tensor([item['label'] for item in batch])
 
-    sst2['train'] = sst2['train'].select(range(n_train))
-    act_list = [
-        i for i in traced.modules() if isinstance(i, qla.pact._PACTActivation)
-    ]
-    print(act_list)
+    # Return a dictionary with the same keys as expected by the model
+    return {**batch_inputs, 'labels': labels}
+
+
+def get_loss_function(task_type):
+    return loss_functions.get(task_type, CrossEntropyLoss())  # Default to CrossEntropyLoss if not specified
+
+def train_activations(config, n_train, n_test, batch_size, dataset, device, traced):
+    task_type = config['dataset_name']
+    tokenizer = MobileBertTokenizer.from_pretrained(config['tokenizer'])
+    dataset['train'] = dataset['train'].select(range(n_train))
+    act_list = [i for i in traced.modules() if isinstance(i, qla.pact._PACTActivation)]
     _verbose = 1
-    actController = qla.pact.PACTActController(act_list,
-                                               actSchedule,
-                                               verbose=_verbose)
+    actController = qla.pact.PACTActController(act_list, actSchedule, verbose=_verbose)
 
     optimizer = torch.optim.Adam(traced.parameters(), lr=0)
-    loss_fn = nn.CrossEntropyLoss()
+    loss_fn = get_loss_function(task_type)
     traced.train()
-    tokenizer = MobileBertTokenizer.from_pretrained(
-        "Alireza1044/mobilebert_sst2")
-    # Define the collate function for DataLoader
-    #TODO: fix bugs
-    data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
 
-    def _collate_fn(batch, device):
-        sentences = [
-            tokenizer(item["sentence"],
-                      truncation=True,
-                      padding='longest',
-                      return_tensors='pt') for item in batch
-        ]
+    dataloader_train_batch = DataLoader(dataset["train"], batch_size=batch_size, collate_fn=lambda x: _collate_fn(x, tokenizer, task_type))
 
-        labels = torch.tensor([item['label'] for item in batch])
-        return sentences, labels
-
-    # Create DataLoader
-    dataloader_train_batch = DataLoader(sst2["train"],
-                                        batch_size=batch_size,
-                                        collate_fn=partial(_collate_fn,
-                                                           device=device))
-    dataloader_test_batch = DataLoader(sst2["validation"],
-                                       batch_size=batch_size,
-                                       collate_fn=partial(_collate_fn,
-                                                          device=device))
-    num_test_examples = len(sst2['validation'])
-    num_train_examples = len(sst2["train"])
-
-    num_train_batches = int(np.ceil(num_train_examples / batch_size))
-
+    num_train_examples = len(dataset["train"])
     torch.autograd.set_detect_anomaly(True)
 
     for epoch in range(EPOCHS):
@@ -359,48 +459,30 @@ def train_activations(n_train, n_test, batch_size, sst2, device, traced):
         traced.train()
         correct = 0
         total = 0
-        eps_in = 1
-        with tqdm(total=num_train_examples, desc="Train",
-                  leave=False) as pbar_batch:
-            for input_batch, label_batch in dataloader_train_batch:
-                input_batch = input_batch
-                label_batch = label_batch.to(device)
+        with tqdm(total=num_train_examples, desc="Train", leave=False) as pbar_batch:
+            for batch in dataloader_train_batch:
+                # Ensure all input tensors are moved to the correct device
+                inputs = {k: v.to(device) if isinstance(v, torch.Tensor) else v for k, v in batch.items()}
+                labels = inputs.pop('labels')  # Remove labels from inputs and use separately as targets
 
-                # absMin, absMax = _getAbsMinAbsMax(input_batch)
-                # input_batch_rounded = torch.trunc(
-                #     torch.clamp(input_batch, min=absMin, max=absMax) /
-                #     eps_in) * eps_in
-                actController.step_pre_training_batch(epoch, optimizer)
-                outputs_list = [None] * len(input_batch)
-                predicted_list = [None] * len(input_batch)
-                si = SimpleInterpreter(traced)
-                for i in range(len(input_batch)):
-                    outputs_list[i] = traced(**input_batch[i])["logits"]
-                    _, predicted_list[i] = torch.max(outputs_list[i], 1)
-                    #si.propagate(traced, **input_batch[i])
-                print(outputs_list)
-                total += label_batch.size(0)
-                correct += (
-                    torch.tensor(predicted_list) == label_batch).sum().item()
+                #optimizer.zero_grad()
+                outputs = traced(**inputs)["logits"]  # Pass the rest of the inputs to the model
+                loss = loss_fn(outputs, labels)
+                #loss.backward()
+                #optimizer.step()
+
+                predicted = outputs.argmax(dim=1)
+                correct += (predicted == labels).sum().item()
+                total += labels.size(0)
                 accuracy = correct / total
 
-                loss = loss_fn(torch.cat(outputs_list, dim=0), label_batch)
-
-                # optimizer.zero_grad()  # clear gradients
-                # loss.backward()  # gradient computation
-                # optimizer.step()  # gradient descent
-
-                pbar_batch.set_description(
-                    f'Train [{epoch+1:02d}/{EPOCHS:02d}] -- Loss: {loss.item():.4f}, Accuracy: {accuracy:.4f}, Batch'
-                )
-                pbar_batch.update(label_batch.size(0))
+                pbar_batch.set_description(f'Train [{epoch+1}/{EPOCHS}] -- Loss: {loss.item():.4f}, Accuracy: {accuracy:.4f}')
+                pbar_batch.update(labels.size(0))
 
                 if total >= num_train_examples:
                     break
-                pbar_batch.close()
-                print(
-                    f' Train [{epoch+1:02d}/{EPOCHS:02d}] -- Accuracy: {accuracy:.4f}'
-                )
+            pbar_batch.close()
+            print(f'Train [{epoch+1}/{EPOCHS}] -- Accuracy: {accuracy:.4f}')
 
 
 # results = []
@@ -428,10 +510,25 @@ def train_activations(n_train, n_test, batch_size, sst2, device, traced):
 # plt.savefig("results_visualization_without_tqt.png")
 # plt.show()
 
-model = quantize_softmax()
+# model = quantize_softmax()
+# print("Evaluating quantized model...")
+# print(softmax_cfg["mode"])
+# eval_model(model)
+# print("Evaluating unquantized model...")
+# eval_model()
 
-print("Evaluating quantized model...")
-print(softmax_cfg["mode"])
-eval_model(model)
-print("Evaluating unquantized model...")
-eval_model()
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description='Test different MobileBERT models and datasets.')
+    parser.add_argument('--config', type=str, help='Configuration key for model and dataset', required=False, default='mobilebert_qqp')
+    args = parser.parse_args()
+
+    config = model_dataset_configs[args.config]
+
+    print(f"Quantizing model for {config['model_name']} on {config['dataset_name']} dataset...")
+    model = quantize_softmax(config)
+    print(f"Evaluating quantized model on {config['dataset_name']}...")
+    eval_model(config,model)
+    print("Evaluating unquantized model...")
+    eval_model(config)
