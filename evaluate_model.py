@@ -1,13 +1,11 @@
 import operator
 import torch
-# import torch._dynamo
 import torch.nn as nn
 from torch.fx import GraphModule
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from transformers.utils.fx import symbolic_trace, get_concrete_args
 import matplotlib.pyplot as plt
-
 
 from transformers import MobileBertTokenizer, MobileBertForSequenceClassification, MobileBertConfig
 from transformers.models.mobilebert.modeling_mobilebert import MobileBertEncoder, MobileBertEmbeddings, MobileBertModel
@@ -20,7 +18,7 @@ import copy
 import traceback
 from functools import partial
 from typing import Callable, List, Literal
-from passes import ApproximateSoftmaxPass
+from passes import ApproximateSoftmaxPass, IntegerizeSoftmaxPass
 from optimum.fx.optimization import Transformation
 from utils import print_tabular, _getAdhocEpsList, roundTensors, delistify, OutputProjectionITA, getMAEPercent
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, matthews_corrcoef
@@ -32,8 +30,9 @@ import quantlib.editing.lightweight.rules as qlr
 import quantlib.editing.fx as qlfx
 import quantlib.algorithms as qla
 from quantlib.editing.fx.passes.pact import PACTInclusiveTracer, PACT_symbolic_trace, PACT_OPS, PACT_OPS_INCLUSIVE
-from quantlib.editing.fx.passes.general import ModularizeActivationsPass
-from quantlib.editing.fx.passes.pact.integerize import IntegerizeSoftmaxPass, IntegerizePACTNetPass
+from quantlib.editing.fx.passes.general import ModularizeActivationsPass, RetracePass
+from quantlib.editing.fx.passes.pact.integerize import IntegerizePACTNetPass, IntegerizeBNActPass, AnnotateEpsPass
+from quantlib.editing.fx.passes.eps import _N_LEVELS_OUT_PROP, _EPS_CONVERSIONS
 from quantlib.editing.fx.util.tracing import LeafTracer, custom_symbolic_trace
 from quantlib.editing.lightweight.rules.filters import NameFilter
 from quantlib.algorithms.pact.pact_ops import (PACTITAMax,
@@ -46,7 +45,7 @@ from fx import HFLeafTracer, SimpleInterpreter
 from torch.nn import CrossEntropyLoss, MSELoss, BCEWithLogitsLoss
 
 # Hyperparameters
-N_LEVELS_ACTS = 2**8
+N_LEVELS_ACTS = 2**16
 UPPER_PERCENTILE = 99.9
 LOWER_PERCENTILE = 0.1
 EPOCHS = 4
@@ -54,14 +53,12 @@ num_layers = 1
 schedule = {1: "start", (EPOCHS - 1): ["freeze"]}
 actSchedule = {1: "start", (EPOCHS - 1): ["freeze"]}
 epsSchedule = {(EPOCHS - 2): 'start'}
-
+fixed_max_length = 41  # Set a fixed max length for all inputs
+eps_in = 1
 
 def pearson_correlation(y_true, y_pred):
-    # Pearson correlation expects two arrays of the same length
-    # `pearsonr` returns a tuple (correlation, p-value), so we extract just the correlation part
     correlation, _ = pearsonr(y_true, y_pred)
     return correlation
-
 
 metrics = {
     "accuracy": accuracy_score,
@@ -151,7 +148,7 @@ model_dataset_configs = {
 softmax_cfg = {
     "mode": "I-BERT",
     "n_levels": N_LEVELS_ACTS,
-    "init_clip": "max",
+    "init_clip": "max", #try out
     "leaky": 0.0,
     "learn_clip": True,
     "lower_percentile": LOWER_PERCENTILE,
@@ -160,13 +157,7 @@ softmax_cfg = {
     "tqt": True,
     "upper_percentile": UPPER_PERCENTILE,
     "act_kind": "identity",
-
 }
-
-
-
-
-
 
 
 def eval_model(config, model=None):
@@ -189,19 +180,19 @@ def eval_model(config, model=None):
     for example in tqdm(evaluate_dataset, desc="Evaluating"):
         # Prepare inputs based on the dataset type
         if dataset_name in ["cola", "sst2"]:
-            inputs = tokenizer(example["sentence"], return_tensors="pt", padding=True, truncation=True)
+            inputs = tokenizer(example["sentence"], return_tensors="pt", padding='max_length', truncation=True, max_length=fixed_max_length)
         elif dataset_name in ["mrpc", "stsb", "rte", "wnli"]:
-            inputs = tokenizer(example["sentence1"], example["sentence2"], return_tensors="pt", padding=True, truncation=True)
+            inputs = tokenizer(example["sentence1"], example["sentence2"], return_tensors="pt", padding='max_length', truncation=True, max_length=fixed_max_length)
         elif dataset_name in ["qqp"]:
-            inputs = tokenizer(example["question1"], example["question2"], return_tensors="pt", padding=True, truncation=True)
+            inputs = tokenizer(example["question1"], example["question2"], return_tensors="pt", padding='max_length', truncation=True, max_length=fixed_max_length)
         elif dataset_name in ["qnli"]:
-            inputs = tokenizer(example["question"], example["sentence"], return_tensors="pt", padding=True, truncation=True)
+            inputs = tokenizer(example["question"], example["sentence"], return_tensors="pt", padding='max_length', truncation=True, max_length=fixed_max_length)
         elif dataset_name in ["mnli", "mnli_matched", "mnli_mismatched", "ax"]:
-            inputs = tokenizer(example["premise"], example["hypothesis"], return_tensors="pt", padding=True, truncation=True)
+            inputs = tokenizer(example["premise"], example["hypothesis"], return_tensors="pt", padding='max_length', truncation=True, max_length=fixed_max_length)
 
         with torch.no_grad():
-            outputs = model(**inputs)
-            logits = outputs["logits"]
+            outputs = model(*inputs.values())
+            logits = outputs[0]
             predicted_class_id = logits.argmax(dim=-1).item()
 
         predictions.append(predicted_class_id)
@@ -215,40 +206,71 @@ def eval_model(config, model=None):
     return result
 
 
+def _collate_fn(batch, tokenizer, task_type):
+    if task_type in ['sst2', 'cola']:  # Tasks with a single sentence input
+        batch_inputs = tokenizer([item["sentence"] for item in batch],
+                                 return_tensors="pt",
+                                 padding='max_length',
+                                 truncation=True,
+                                 max_length=fixed_max_length)
+    elif task_type in ['mrpc', 'stsb', 'rte', 'wnli']:  # Tasks with two sentences
+        batch_inputs = tokenizer([item["sentence1"] for item in batch],
+                                 [item["sentence2"] for item in batch],
+                                 return_tensors="pt",
+                                 padding='max_length',
+                                 truncation=True,
+                                 max_length=fixed_max_length)
+    elif task_type in ['qqp']:  # Tasks with two questions
+        batch_inputs = tokenizer([item["question1"] for item in batch],
+                                 [item["question2"] for item in batch],
+                                 return_tensors="pt",
+                                 padding='max_length',
+                                 truncation=True,
+                                 max_length=fixed_max_length)
+    elif task_type in ['mnli', 'mnli_matched', 'mnli_mismatched', 'ax']:  # Tasks with premise and hypothesis
+        batch_inputs = tokenizer([item["premise"] for item in batch],
+                                 [item["hypothesis"] for item in batch],
+                                 return_tensors="pt",
+                                 padding='max_length',
+                                 truncation=True,
+                                 max_length=fixed_max_length)
+    elif task_type == 'qnli':  # QNLI with question and context sentence
+        batch_inputs = tokenizer([item["question"] for item in batch],
+                                 [item["sentence"] for item in batch],
+                                 return_tensors="pt",
+                                 padding='max_length',
+                                 truncation=True,
+                                 max_length=fixed_max_length)
+
+    labels = torch.tensor([item['label'] for item in batch])
+    return {**batch_inputs, 'labels': labels}
 
 
-def quantize_softmax(config,
+def quantize_softmax(config, dataloader_batch,
                      n_train=1,
                      n_test=128,
-                     batch_size=1,
                      epochs=1,
                      verbose=0):
-    model = MobileBertForSequenceClassification.from_pretrained(config['model_name'])
+    model = MobileBertForSequenceClassification.from_pretrained(
+        config['model_name'])
     dataset_name = config['dataset_name']
     tokenizer_name = config['tokenizer']
-
-    dataset = load_dataset("nyu-mll/glue",dataset_name)
+    task_type = config['dataset_name']
+    dataset = load_dataset("nyu-mll/glue", dataset_name)
     tokenizer = MobileBertTokenizer.from_pretrained(tokenizer_name)
     # Load dataset
-
-    print(dataset["train"][0])
-
-    # def compute_metrics(eval_pred):
-    #     predictions, labels = eval_pred
-    #     predictions = np.argmax(predictions, axis=1)
-    #     return accuracy.compute(predictions=predictions, references=labels)
 
     id2label = {0: "NEGATIVE", 1: "POSITIVE"}
     label2id = {"NEGATIVE": 0, "POSITIVE": 1}
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    model = MobileBertForSequenceClassification.from_pretrained(config['model_name']).to(device)
+    model = MobileBertForSequenceClassification.from_pretrained(
+        config['model_name']).to(device)
 
     # Trace model
 
     print("[=== Step 1 : Trace Model ===")
-    # torch._dynamo.reset()
 
     htraced = symbolic_trace(
         model,
@@ -257,125 +279,29 @@ def quantize_softmax(config,
     )
     htraced = ModularizeActivationsPass().apply(htraced)
     htraced = ApproximateSoftmaxPass(**softmax_cfg).apply(htraced)
-    #htraced = IntegerizeSoftmaxPass(**softmax_cfg).apply(htraced)
-
-
-    stateDict = model.state_dict()
-    modelConf = model.config
-    modelConf.num_hidden_layers = num_layers
-
-    def _collate_fn(batch, device):
-        texts = [item['text'] for item in batch]
-        input_ids = torch.stack(
-            [torch.Tensor(item['input_ids']) for item in batch]).to(device)
-        attention_masks = torch.stack([
-            torch.Tensor(item['attention_mask']) for item in batch
-        ]).to(device)
-        labels = torch.tensor(
-            [torch.Tensor([item['label']]) for item in batch]).to(device)
-        return texts, input_ids, attention_masks, labels
-
-    dataset_train = load_dataset("emo",
-                                 streaming=False,
-                                 trust_remote_code=True,
-                                 split='train',
-                                 keep_in_memory=True)
-    dataset_test = load_dataset("emo",
-                                streaming=False,
-                                trust_remote_code=True,
-                                split='test',
-                                keep_in_memory=True)
-
-    # Tokenize, truncate and pad the dataset
-    dataset_train = dataset_train.map(
-        lambda x: tokenizer(x['text'],
-                            truncation=True,
-                            max_length=modelConf.max_length,
-                            padding='max_length'),
-        batched=True,
-        keep_in_memory=True)
-    # dataset_train = dataset_train.shuffle(seed = 4232423452)
-    dataset_test = dataset_test.map(
-        lambda x: tokenizer(x['text'],
-                            truncation=True,
-                            max_length=modelConf.max_length,
-                            padding='max_length'),
-        batched=True,
-        keep_in_memory=True)
-    # dataset_test = dataset_test.shuffle(seed = 4232423452)
-    mobileBertModel = MobileBertModel(modelConf)
-    model = MobileBertEncoder(modelConf)  # JUNGVI: First Quantize the encoder
-    model.load_state_dict(stateDict, strict=False)
+    # htraced = IntegerizeSoftmaxPass(**softmax_cfg).apply(htraced)
 
     model.eval()
-    for MBertLayer in model.layer:
-        MBertLayer.attention.output.LayerNorm = torch.nn.Identity()
-        MBertLayer.output.LayerNorm = torch.nn.Identity()
-        MBertLayer.output.bottleneck.LayerNorm = torch.nn.Identity()
-        MBertLayer.bottleneck.input.LayerNorm = torch.nn.Identity()
-        MBertLayer.bottleneck.attention.LayerNorm = torch.nn.Identity()
-        for ffnLayer in MBertLayer.ffn:
-            ffnLayer.output.LayerNorm = torch.nn.Identity()
-
-    embedder = MobileBertEmbeddings(modelConf)
-
-    # Instanticate the dataloader
-    dataloader_train = DataLoader(dataset_train,
-                                  batch_size=batch_size,
-                                  collate_fn=partial(_collate_fn,
-                                                     device=device))
-    # dataloader_test = DataLoader(dataset_test,
-    #                              batch_size=batch_size,
-    #                              collate_fn=partial(_collate_fn,
-    #                                                 device=device))
 
     # Get sample batch
-    train_batch = next(iter(dataloader_train))
-    #test_batch = next(iter(dataloader_test))
+    train_batch = next(iter(dataloader_batch))
 
-    train_batch_embed = embedder(
-        input_ids=train_batch[1].type(torch.LongTensor))
-    train_batch_head_mask = mobileBertModel.get_head_mask(
-        None, modelConf.num_hidden_layers)
-    train_batch_attention_mask_extended = mobileBertModel.get_extended_attention_mask(
-        train_batch[2].type(torch.LongTensor), train_batch[1].size())
-    # train_output = model(hidden_states=train_batch_embed, attention_mask=attention_mask_extended, head_mask=head_mask)
-
-    fakeBatch = [train_batch_embed, train_batch_attention_mask_extended]
-    eps_in = tuple(_getAdhocEpsList(256, *fakeBatch))
-    eps_in[1].data = torch.tensor(
-        1.)  # JUNGVI: replace eps of mask with 1.0 as it is inf otherwise
-    fakeBatch = roundTensors(fakeBatch, eps_in)
-    fakeBatch[1][fakeBatch[1] != 0] = -256 // 2
-
-    # goldenOutput = model(fakeBatch[0], fakeBatch[1], train_batch_head_mask)
     print("[MobileBERT] ======= Step 1 : Trace Model =======")
-
     torch._dynamo.reset()
     graphs: List[torch.fx.GraphModule] = []
 
     def dynamo_graph_extract_compiler(model, gm: GraphModule,
                                       inputs: List[torch.Tensor]) -> Callable:
-        # foldConstant(gm, matchGetAttrNode, *inputs)
         graphs.append(gm)
         return gm.forward
 
     for param in model.parameters():
         param.requires_grad = False
 
-    try:
-        model_fn = torch.compile(backend=partial(dynamo_graph_extract_compiler,
-                                                 model),
-                                 dynamic=False)(model)
-        _ = model_fn(fakeBatch[0], fakeBatch[1], train_batch_head_mask)
-    except Exception as e:
-        print("[MobileBERT] === PyTorch Network (non-tracable) ===\n", model)
-        print("[MobileBERT] === Error ===\n", e)
-        if verbose > 0:
-            traceback.print_exc()
-        import IPython
-        IPython.embed()
-        exit(-1)
+    model_fn = torch.compile(backend=partial(dynamo_graph_extract_compiler,
+                                             model),
+                             dynamic=False)(model)
+    _ = model_fn(train_batch["input_ids"], train_batch["attention_mask"], train_batch["token_type_ids"])
 
     gm = graphs[0]
     gm.graph.eliminate_dead_code()
@@ -402,54 +328,33 @@ def quantize_softmax(config,
     traced_approx = SOFTMAX_EVAL_PACT_symbolic_trace(traced_approx)
     traced_approx.graph.print_tabular()
 
-    train_activations(config, n_train, n_test, batch_size, dataset, device, htraced)
+    train_activations(config, n_train, n_test, dataset, device,
+                      traced_approx, dataloader_batch)
     # print(traced)
 
-    return htraced
-
-def _collate_fn(batch, tokenizer, task_type):
-    if task_type in ['sst2', 'cola']:  # Tasks with a single sentence input
-        batch_inputs = tokenizer([item["sentence"] for item in batch],
-                                 return_tensors="pt", padding=True, truncation=True)
-    elif task_type in ['mrpc', 'stsb', 'rte', 'wnli']:  # Tasks with two sentences
-        batch_inputs = tokenizer([item["sentence1"] for item in batch],
-                                 [item["sentence2"] for item in batch],
-                                 return_tensors="pt", padding=True, truncation=True)
-    elif task_type in ['qqp']:  # Tasks with two questions
-        batch_inputs = tokenizer([item["question1"] for item in batch],
-                                 [item["question2"] for item in batch],
-                                 return_tensors="pt", padding=True, truncation=True)
-    elif task_type in ['mnli', 'mnli_matched', 'mnli_mismatched', 'ax']:  # Tasks with premise and hypothesis
-        batch_inputs = tokenizer([item["premise"] for item in batch],
-                                 [item["hypothesis"] for item in batch],
-                                 return_tensors="pt", padding=True, truncation=True)
-    elif task_type == 'qnli':  # QNLI with question and context sentence
-        batch_inputs = tokenizer([item["question"] for item in batch],
-                                 [item["sentence"] for item in batch],
-                                 return_tensors="pt", padding=True, truncation=True)
-
-    labels = torch.tensor([item['label'] for item in batch])
-
-    # Return a dictionary with the same keys as expected by the model
-    return {**batch_inputs, 'labels': labels}
+    return traced_approx
 
 
 def get_loss_function(task_type):
     return loss_functions.get(task_type, CrossEntropyLoss())  # Default to CrossEntropyLoss if not specified
 
-def train_activations(config, n_train, n_test, batch_size, dataset, device, traced):
+
+def train_activations(config, n_train, n_test, dataset, device,
+                      traced, dataloader_train_batch):
     task_type = config['dataset_name']
     tokenizer = MobileBertTokenizer.from_pretrained(config['tokenizer'])
     dataset['train'] = dataset['train'].select(range(n_train))
-    act_list = [i for i in traced.modules() if isinstance(i, qla.pact._PACTActivation)]
+    act_list = [
+        i for i in traced.modules() if isinstance(i, qla.pact._PACTActivation)
+    ]
     _verbose = 1
-    actController = qla.pact.PACTActController(act_list, actSchedule, verbose=_verbose)
+    actController = qla.pact.PACTActController(act_list,
+                                               actSchedule,
+                                               verbose=_verbose)
 
     optimizer = torch.optim.Adam(traced.parameters(), lr=0)
     loss_fn = get_loss_function(task_type)
     traced.train()
-
-    dataloader_train_batch = DataLoader(dataset["train"], batch_size=batch_size, collate_fn=lambda x: _collate_fn(x, tokenizer, task_type))
 
     num_train_examples = len(dataset["train"])
     torch.autograd.set_detect_anomaly(True)
@@ -459,30 +364,80 @@ def train_activations(config, n_train, n_test, batch_size, dataset, device, trac
         traced.train()
         correct = 0
         total = 0
-        with tqdm(total=num_train_examples, desc="Train", leave=False) as pbar_batch:
+        with tqdm(total=num_train_examples, desc="Train",
+                  leave=False) as pbar_batch:
             for batch in dataloader_train_batch:
                 # Ensure all input tensors are moved to the correct device
-                inputs = {k: v.to(device) if isinstance(v, torch.Tensor) else v for k, v in batch.items()}
-                labels = inputs.pop('labels')  # Remove labels from inputs and use separately as targets
+                inputs = {
+                    k: v.to(device) if isinstance(v, torch.Tensor) else v
+                    for k, v in batch.items()
+                }
+                labels = inputs.pop('labels')
 
-                #optimizer.zero_grad()
-                outputs = traced(**inputs)["logits"]  # Pass the rest of the inputs to the model
-                loss = loss_fn(outputs, labels)
-                #loss.backward()
-                #optimizer.step()
+                # optimizer.zero_grad()
+                #print(inputs)
+                outputs = traced(*inputs.values())
+                #print(outputs)  # Debugging print to understand the output structure
 
-                predicted = outputs.argmax(dim=1)
+                # Adjust this line based on the output structure
+                if isinstance(outputs, tuple):
+                    outputs = outputs[0]
+                logits = outputs["logits"] if isinstance(outputs, dict) else outputs
+
+                loss = loss_fn(logits, labels)
+                # loss.backward()
+                # optimizer.step()
+
+                predicted = logits.argmax(dim=1)
                 correct += (predicted == labels).sum().item()
                 total += labels.size(0)
                 accuracy = correct / total
 
-                pbar_batch.set_description(f'Train [{epoch+1}/{EPOCHS}] -- Loss: {loss.item():.4f}, Accuracy: {accuracy:.4f}')
+                pbar_batch.set_description(
+                    f'Train [{epoch+1}/{EPOCHS}] -- Loss: {loss.item():.4f}, Accuracy: {accuracy:.4f}'
+                )
                 pbar_batch.update(labels.size(0))
 
                 if total >= num_train_examples:
                     break
             pbar_batch.close()
             print(f'Train [{epoch+1}/{EPOCHS}] -- Accuracy: {accuracy:.4f}')
+
+
+def IntergerizePass(config, model, dataloader):
+
+    def eps_conversion_pact_acts(m: nn.Module, eps_in: torch.Tensor):
+        if(isinstance(m, PACTSoftmax)):
+            return eps_in
+        return m.get_eps().type_as(eps_in)
+
+    model = RetracePass(PACT_symbolic_trace).apply(model)
+    train_batch = next(iter(dataloader))
+    eps_in = tuple(_getAdhocEpsList(N_LEVELS_ACTS, *train_batch.values()))
+    #TODO: Debugg AnnotateEPSPass
+    model = AnnotateEpsPass(eps_in,
+                            n_levels_in=N_LEVELS_ACTS,
+                            verbose=True, prop_eps=False).apply(model)
+    # class QuantizationParams:
+
+    #     def __init__(self, eps_in, eps_out):
+    #         self.eps_in = eps_in
+    #         self.eps_out = eps_out
+
+    # def module_of_node(gm: torch.fx.GraphModule, node: torch.fx.Node):
+    #     assert node.op == "call_module", "module_of_node can only be called on 'call_module' nodes!"
+    #     return gm.get_submodule(node.target)
+
+    # for node in model.graph.nodes:
+    #     if "_ql_replaced__approximate_softmax_pass" in node.name:
+    #         print("Setting quantization parameters for:", node.name)
+    #         node.meta['quant'] = QuantizationParams(
+    #             eps_in=eps_in,
+    #             eps_out=eps_conversion_pact_acts(module_of_node(model, node),
+    #                                              eps_in))
+    model = IntegerizeBNActPass().apply(model)
+    model = IntegerizeSoftmaxPass().apply(model)
+    return model
 
 
 # results = []
@@ -505,7 +460,7 @@ def train_activations(config, n_train, n_test, batch_size, dataset, device, trac
 #     axs[i].set_ylabel("Evaluation Result")
 #     axs[i].legend()
 
-#Save the visualization to a file
+# Save the visualization to a file
 # plt.tight_layout()
 # plt.savefig("results_visualization_without_tqt.png")
 # plt.show()
@@ -518,17 +473,36 @@ def train_activations(config, n_train, n_test, batch_size, dataset, device, trac
 # eval_model()
 
 if __name__ == "__main__":
-    import argparse
-
-    parser = argparse.ArgumentParser(description='Test different MobileBERT models and datasets.')
-    parser.add_argument('--config', type=str, help='Configuration key for model and dataset', required=False, default='mobilebert_qqp')
+    parser = argparse.ArgumentParser(
+        description='Test different MobileBERT models and datasets.')
+    parser.add_argument('--config',
+                        type=str,
+                        help='Configuration key for model and dataset',
+                        required=False,
+                        default='mobilebert_qqp')
     args = parser.parse_args()
 
     config = model_dataset_configs[args.config]
 
-    print(f"Quantizing model for {config['model_name']} on {config['dataset_name']} dataset...")
-    model = quantize_softmax(config)
+    print(
+        f"Quantizing model for {config['model_name']} on {config['dataset_name']} dataset..."
+    )
+
+    dataset = load_dataset("nyu-mll/glue", config['dataset_name'])
+    tokenizer = MobileBertTokenizer.from_pretrained(config['tokenizer'])
+
+    dataloader = DataLoader(
+        dataset["train"],
+        batch_size=5,
+        collate_fn=lambda x: _collate_fn(x, tokenizer, config['dataset_name']))
+
+    model = quantize_softmax(config, dataloader)
     print(f"Evaluating quantized model on {config['dataset_name']}...")
-    eval_model(config,model)
+    #eval_model(config, model)
+
+    print("Integerizing model...")
+    model = IntergerizePass(config, model, dataloader)
+    print(f"Evaluating integerized model on {config['dataset_name']}...")
+    #eval_model(config, model)
     print("Evaluating unquantized model...")
     eval_model(config)
