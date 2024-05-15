@@ -45,7 +45,7 @@ from fx import HFLeafTracer, SimpleInterpreter
 from torch.nn import CrossEntropyLoss, MSELoss, BCEWithLogitsLoss
 
 # Hyperparameters
-N_LEVELS_ACTS = 2**16
+N_LEVELS_ACTS = 2**4
 UPPER_PERCENTILE = 99.9
 LOWER_PERCENTILE = 0.1
 EPOCHS = 4
@@ -53,7 +53,7 @@ num_layers = 1
 schedule = {1: "start", (EPOCHS - 1): ["freeze"]}
 actSchedule = {1: "start", (EPOCHS - 1): ["freeze"]}
 epsSchedule = {(EPOCHS - 2): 'start'}
-fixed_max_length = 41  # Set a fixed max length for all inputs
+fixed_max_length = 200  # Set a fixed max length for all inputs
 eps_in = 1
 
 def pearson_correlation(y_true, y_pred):
@@ -162,7 +162,8 @@ softmax_cfg = {
 
 def eval_model(config, model=None):
     if model is None:
-        model = MobileBertForSequenceClassification.from_pretrained(config['model_name'])
+        model = MobileBertForSequenceClassification.from_pretrained(
+            config['model_name'])
     model.eval()
 
     # Load the appropriate dataset
@@ -180,19 +181,47 @@ def eval_model(config, model=None):
     for example in tqdm(evaluate_dataset, desc="Evaluating"):
         # Prepare inputs based on the dataset type
         if dataset_name in ["cola", "sst2"]:
-            inputs = tokenizer(example["sentence"], return_tensors="pt", padding='max_length', truncation=True, max_length=fixed_max_length)
+            inputs = tokenizer(example["sentence"],
+                               return_tensors="pt",
+                               padding='max_length',
+                               truncation=True,
+                               max_length=fixed_max_length)
         elif dataset_name in ["mrpc", "stsb", "rte", "wnli"]:
-            inputs = tokenizer(example["sentence1"], example["sentence2"], return_tensors="pt", padding='max_length', truncation=True, max_length=fixed_max_length)
+            inputs = tokenizer(example["sentence1"],
+                               example["sentence2"],
+                               return_tensors="pt",
+                               padding='max_length',
+                               truncation=True,
+                               max_length=fixed_max_length)
         elif dataset_name in ["qqp"]:
-            inputs = tokenizer(example["question1"], example["question2"], return_tensors="pt", padding='max_length', truncation=True, max_length=fixed_max_length)
+            inputs = tokenizer(example["question1"],
+                               example["question2"],
+                               return_tensors="pt",
+                               padding='max_length',
+                               truncation=True,
+                               max_length=fixed_max_length)
         elif dataset_name in ["qnli"]:
-            inputs = tokenizer(example["question"], example["sentence"], return_tensors="pt", padding='max_length', truncation=True, max_length=fixed_max_length)
+            inputs = tokenizer(example["question"],
+                               example["sentence"],
+                               return_tensors="pt",
+                               padding='max_length',
+                               truncation=True,
+                               max_length=fixed_max_length)
         elif dataset_name in ["mnli", "mnli_matched", "mnli_mismatched", "ax"]:
-            inputs = tokenizer(example["premise"], example["hypothesis"], return_tensors="pt", padding='max_length', truncation=True, max_length=fixed_max_length)
+            inputs = tokenizer(example["premise"],
+                               example["hypothesis"],
+                               return_tensors="pt",
+                               padding='max_length',
+                               truncation=True,
+                               max_length=fixed_max_length)
 
         with torch.no_grad():
-            outputs = model(*inputs.values())
-            logits = outputs[0]
+            outputs = model(inputs["input_ids"], inputs["attention_mask"],
+                            inputs["token_type_ids"])
+            if isinstance(outputs, tuple):
+                outputs = outputs[0]
+            logits = outputs["logits"] if isinstance(outputs,
+                                                     dict) else outputs
             predicted_class_id = logits.argmax(dim=-1).item()
 
         predictions.append(predicted_class_id)
@@ -247,7 +276,7 @@ def _collate_fn(batch, tokenizer, task_type):
 
 
 def quantize_softmax(config, dataloader_batch,
-                     n_train=1,
+                     n_train=10,
                      n_test=128,
                      epochs=1,
                      verbose=0):
@@ -269,7 +298,6 @@ def quantize_softmax(config, dataloader_batch,
         config['model_name']).to(device)
 
     # Trace model
-
     print("[=== Step 1 : Trace Model ===")
 
     htraced = symbolic_trace(
@@ -376,10 +404,8 @@ def train_activations(config, n_train, n_test, dataset, device,
 
                 # optimizer.zero_grad()
                 #print(inputs)
-                outputs = traced(*inputs.values())
+                outputs = traced(inputs["input_ids"], inputs["attention_mask"], inputs["token_type_ids"])
                 #print(outputs)  # Debugging print to understand the output structure
-
-                # Adjust this line based on the output structure
                 if isinstance(outputs, tuple):
                     outputs = outputs[0]
                 logits = outputs["logits"] if isinstance(outputs, dict) else outputs
@@ -407,36 +433,46 @@ def train_activations(config, n_train, n_test, dataset, device,
 def IntergerizePass(config, model, dataloader):
 
     def eps_conversion_pact_acts(m: nn.Module, eps_in: torch.Tensor):
-        if(isinstance(m, PACTSoftmax)):
-            return eps_in
-        return m.get_eps().type_as(eps_in)
+        if (isinstance(m, PACTSoftmax)):
+            return torch.tensor(eps_in)
+        return torch.tensor(m.get_eps())
 
     model = RetracePass(PACT_symbolic_trace).apply(model)
     train_batch = next(iter(dataloader))
-    eps_in = tuple(_getAdhocEpsList(N_LEVELS_ACTS, *train_batch.values()))
+    eps_in = torch.tensor(
+        _getAdhocEpsList(N_LEVELS_ACTS, *train_batch.values()))
+    eps_in = torch.tensor([eps_in[0]])
+
     #TODO: Debugg AnnotateEPSPass
-    model = AnnotateEpsPass(eps_in,
-                            n_levels_in=N_LEVELS_ACTS,
-                            verbose=True, prop_eps=False).apply(model)
-    # class QuantizationParams:
+    # model = AnnotateEpsPass(eps_in,
+    #                         n_levels_in=N_LEVELS_ACTS,
+    #                         verbose=True, prop_eps=True, prop_n_levels=False, prop_sign=False).apply(model)
+    class QuantizationParams:
 
-    #     def __init__(self, eps_in, eps_out):
-    #         self.eps_in = eps_in
-    #         self.eps_out = eps_out
+        def __init__(self, eps_in, eps_out):
+            self.eps_in = eps_in
+            self.eps_out = eps_out
 
-    # def module_of_node(gm: torch.fx.GraphModule, node: torch.fx.Node):
-    #     assert node.op == "call_module", "module_of_node can only be called on 'call_module' nodes!"
-    #     return gm.get_submodule(node.target)
+    def module_of_node(gm: torch.fx.GraphModule, node: torch.fx.Node):
+        assert node.op == "call_module", "module_of_node can only be called on 'call_module' nodes!"
+        m = gm.get_submodule(node.target)
+        return gm.get_submodule(node.target)
 
-    # for node in model.graph.nodes:
-    #     if "_ql_replaced__approximate_softmax_pass" in node.name:
-    #         print("Setting quantization parameters for:", node.name)
-    #         node.meta['quant'] = QuantizationParams(
-    #             eps_in=eps_in,
-    #             eps_out=eps_conversion_pact_acts(module_of_node(model, node),
-    #                                              eps_in))
-    model = IntegerizeBNActPass().apply(model)
+    for node in model.graph.nodes:
+        if "_ql_replaced__approximate_softmax_pass" in node.name:
+            print("Setting quantization parameters for:", node.name)
+            eps_out = eps_conversion_pact_acts(module_of_node(model, node),
+                                               eps_in)
+            node.meta['quant'] = QuantizationParams(eps_in=eps_in.clone(),
+                                                    eps_out=eps_out.clone())
+            print(eps_out)
+            eps_in = eps_out
     model = IntegerizeSoftmaxPass().apply(model)
+    model = IntegerizeBNActPass().apply(model)
+    model = RetracePass(PACT_symbolic_trace).apply(model)
+
+    model.graph.print_tabular()
+    model.graph.lint()
     return model
 
 
@@ -493,16 +529,16 @@ if __name__ == "__main__":
 
     dataloader = DataLoader(
         dataset["train"],
-        batch_size=5,
+        batch_size=1,
         collate_fn=lambda x: _collate_fn(x, tokenizer, config['dataset_name']))
 
     model = quantize_softmax(config, dataloader)
     print(f"Evaluating quantized model on {config['dataset_name']}...")
-    #eval_model(config, model)
+    eval_model(config, model)
 
     print("Integerizing model...")
     model = IntergerizePass(config, model, dataloader)
     print(f"Evaluating integerized model on {config['dataset_name']}...")
-    #eval_model(config, model)
+    eval_model(config, model)
     print("Evaluating unquantized model...")
     eval_model(config)

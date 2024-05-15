@@ -82,7 +82,7 @@ def integerize_softmax_fun(gm: fx.GraphModule,
         if k.op == 'call_module'
     ][::-1]
     module = matched_modules[0]
-    eps_in = extract_eps(lin_node.meta['quant'].eps_in)
+    eps_in = lin_node.meta['quant'].eps_in
     # assert isinstance(module, PACTSoftmax), f"integerize_softmax_fun got bad match - expected PACTSoftmax, got {type(module)}"
 
     if mode == 'I-BERT':
