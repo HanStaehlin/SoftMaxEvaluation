@@ -80,7 +80,7 @@ class SimpleInterpreter:
 
         for node in self.graph.nodes:
             if node.op == 'placeholder':
-                result = kwargs[node.name]
+                result = next(args_iter)
             elif node.op == 'get_attr':
                 result = self.fetch_attr(node.target)
             elif node.op == 'call_function':
