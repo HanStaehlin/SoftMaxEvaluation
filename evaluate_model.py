@@ -13,7 +13,8 @@ from torch.fx import GraphModule
 from torch.nn import CrossEntropyLoss, MSELoss
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-from transformers import (MobileBertForSequenceClassification, MobileBertTokenizer)
+from transformers import (MobileBertForSequenceClassification, MobileBertTokenizer, MobileBertModel)
+import matplotlib.pyplot as plt
 
 from typing import Literal
 from transformers.utils import logging
@@ -37,11 +38,12 @@ UPPER_PERCENTILE = 99.9
 LOWER_PERCENTILE = 0.1
 EPOCHS = 5
 BATCH_SIZE = 1
+NumHiddenLayers = 1
 schedule = {1: "start", (EPOCHS - 1): ["freeze"]}
 actSchedule = {1: "start", (EPOCHS - 1): ["freeze"]}
 epsSchedule = {(EPOCHS - 2): 'start'}
 
-fixed_max_length = 41  # Set a fixed max length for all inputs
+fixed_max_length = 150  # Set a fixed max length for all inputs
 
 
 def pearson_correlation(y_true, y_pred):
@@ -255,8 +257,10 @@ def eval_model(config, model = None, batch_size = BATCH_SIZE, n_test = 512):
                                max_length = fixed_max_length)
 
         with torch.no_grad():
-            outputs = model(*inputs.values())
-            logits = outputs[0]
+            outputs = model(inputs["input_ids"], inputs["attention_mask"], inputs["token_type_ids"])
+            if isinstance(outputs, tuple):
+                outputs = outputs[0]
+            logits = outputs["logits"] if isinstance(outputs, dict) else outputs
             predicted_class_id = logits.argmax(dim = -1).item()
 
         predictions.append(predicted_class_id)
@@ -311,6 +315,9 @@ def quantize_softmax(config, dataloader, n_train = 10, n_test = 128, epochs = 1,
     dataset_name = config['dataset_name']
     dataset = load_dataset("nyu-mll/glue", dataset_name)
 
+    # modelConf = model.config
+    # modelConf.num_hidden_layers = NumHiddenLayers
+    # model = MobileBertModel(modelConf)
     device = torch.device('cpu')
 
     # Trace model
@@ -405,8 +412,8 @@ def train_activations(config, n_train, n_test, dataset, device, traced, dataload
                 labels = inputs.pop('labels')
 
                 # WIESEP: For debugging purposes, we can use the SimpleInterpreter to check the intermediate activations and output of the model
-                outputs = traced(*inputs.values())
-                # outputs = sp.propagate(*inputs.values())
+                outputs = traced(inputs["input_ids"], inputs["attention_mask"], inputs["token_type_ids"])
+                #outputs = sp.propagate(inputs["input_ids"], inputs["attention_mask"], inputs["token_type_ids"])
 
                 actController.step_pre_training_batch()
                 epsController.step_pre_training_batch()
@@ -451,7 +458,7 @@ if __name__ == "__main__":
                         type = str,
                         help = 'Configuration key for model and dataset',
                         required = False,
-                        default = 'mobilebert_mnli')
+                        default = 'mobilebert_sst2')
     args = parser.parse_args()
 
     config = model_dataset_configs[args.config]
@@ -478,12 +485,8 @@ if __name__ == "__main__":
     print("=== Evaluating True-Quant Model ===")
     eval_model(config, model_tq, n_test = -1)
 
-    # ipdb.set_trace()
-
     sp = SimpleInterpreter(model_tq)
-    sp.propagate(*(next(iter(dataloader))).values())
-    print(model_tq)
+    batch=next(iter(dataloader))
+    sp.propagate(batch["input_ids"], batch["attention_mask"], batch["token_type_ids"])
     from pprint import pprint
-    pprint([{k: [v.min(), v.max()]} for k, v in sp.env.items() if "softmax" in k])
-
-    # ipdb.set_trace()
+    pprint([{k: [v.min(), v.max(),v]} for k, v in sp.env.items() if "softmax" in k])

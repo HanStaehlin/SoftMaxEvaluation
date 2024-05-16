@@ -2,7 +2,7 @@ from typing import Union, Optional, Tuple, List, Literal
 from dataclasses import dataclass
 from functools import partial
 
-from editing.fx.passes.eps import QuantInfo
+from quantlib.editing.fx.passes.eps import QuantInfo
 import numpy as np
 
 import torch
