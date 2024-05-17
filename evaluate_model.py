@@ -30,7 +30,7 @@ from quantlib.editing.fx.passes.pact import PACT_OPS, PACT_symbolic_trace
 from quantlib.editing.fx.passes.pact.integerize import (AnnotateEpsPass, IntegerizeBNActPass)
 from quantlib.editing.fx.util.tracing import LeafTracer
 from utils import _getAdhocEpsList
-from fx import SimpleInterpreter
+from fx import SimpleInterpreter, HistogramInterpreter
 
 # Hyperparameters
 N_LEVELS_ACTS = 2**8
@@ -348,7 +348,7 @@ def quantize_softmax(config, dataloader, n_train = 10, n_test = 128, epochs = 1,
     print("=== Original Model ===")
     # print(traced)
     # traced.graph.print_tabular()
-    eval_model(config, traced, n_test = n_test)
+    #eval_model(config, traced, n_test = n_test)
 
     print("=== Modularize Activations ===")
     traced_mod = ModularizeActivationsPass().apply(traced)
@@ -357,7 +357,7 @@ def quantize_softmax(config, dataloader, n_train = 10, n_test = 128, epochs = 1,
 
     # print(traced_approx)
     # print(_print_tabular(traced_approx))
-    eval_model(config, traced_approx, n_test = n_test)
+    #eval_model(config, traced_approx, n_test = n_test)
 
     train_activations(config, n_train, n_test, dataset, device, traced_approx, dataloader)
 
@@ -405,6 +405,10 @@ def train_activations(config, n_train, n_test, dataset, device, traced, dataload
         traced.train()
         correct = 0
         total = 0
+
+        hi = HistogramInterpreter(traced)
+        batch=next(iter(dataloader_train_batch))
+        #hi.propagate(epoch, batch["input_ids"], batch["attention_mask"], batch["token_type_ids"])
         with tqdm(total = num_train_examples, desc = "Train", leave = False) as pbar_batch:
             for batch in dataloader_train_batch:
                 # Ensure all input tensors are moved to the correct device
@@ -490,3 +494,15 @@ if __name__ == "__main__":
     sp.propagate(batch["input_ids"], batch["attention_mask"], batch["token_type_ids"])
     from pprint import pprint
     pprint([{k: [v.min(), v.max(),v]} for k, v in sp.env.items() if "softmax" in k])
+
+    plt.figure(figsize=(10, 6))
+    for k, v in sp.env.items():
+        if "softmax" in k:
+            plt.hist(v[v>-128].flatten().numpy(), bins=30, color='blue', alpha=0.7)  
+    plt.xlabel('Value')
+    plt.ylabel('Frequency')
+    plt.title('Histogram of Tensor Values')
+    # Save the plot to a file
+    plt.savefig('tensor_histogram.png')
+    plt.close()  # Close the plot explicitly after savingq
+    plt.show()  # Display the plot

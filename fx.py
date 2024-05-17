@@ -33,6 +33,11 @@ from quantlib.editing.fx.passes.pact import PACT_OPS
 import torch.nn as nn
 
 from typing import Dict, List, Union
+from quantlib.editing.fx.util import gm_modules, module_of_node
+import quantlib.algorithms as qla
+from quantlib.algorithms.pact.pact_ops import *
+from matplotlib import pyplot as plt
+import os
 
 class HFLeafTracer(HFTracer):
     # Allows tracing modules with custom granularity: Any modules of a type
@@ -160,3 +165,70 @@ class HistoryInterpreter:
                 print(f"Node {node.name:<100}: {diff:.4e}")
 
         return result
+
+class HistogramInterpreter:
+    """
+    Interpreter for FX graphs that logs and plots histogram data for specific module types.
+    """
+
+    def __init__(self, mod):
+        self.mod = mod
+        self.graph = mod.graph
+        self.modules = dict(self.mod.named_modules())
+        self.env = {}
+
+    def load_arg(self, a):
+        return torch.fx.graph.map_arg(a, lambda n: self.env[n.name])
+
+    def fetch_attr(self, target: str):
+        target_atoms = target.split('.')
+        attr_itr = self.mod
+        for i, atom in enumerate(target_atoms):
+            if not hasattr(attr_itr, atom):
+                raise RuntimeError(f"Node referenced nonexistant target {'.'.join(target_atoms[:i])}")
+            attr_itr = getattr(attr_itr, atom)
+        return attr_itr
+
+    def propagate(self, epoch, *args, **kwargs):
+        args_iter = iter(args)
+        for node in self.graph.nodes:
+            if node.op == 'placeholder':
+                result = next(args_iter)
+            elif node.op == 'get_attr':
+                result = self.fetch_attr(node.target)
+            elif node.op == 'call_function':
+                result = node.target(*self.load_arg(node.args), **self.load_arg(node.kwargs))
+            elif node.op == 'call_method':
+                self_obj, *args = self.load_arg(node.args)
+                kwargs = self.load_arg(node.kwargs)
+                result = getattr(self_obj, node.target)(*args, **kwargs)
+            elif node.op == 'call_module':
+                m = self.modules[node.target]
+                result = m(*self.load_arg(node.args), **self.load_arg(node.kwargs))
+                if isinstance(m, qla.pact._PACTActivation):
+                    self.plot_histogram(m.histogram, m.clip_lo, m.clip_hi, node.name, epoch, m.truemin, m.truemax)
+            self.env[node.name] = result
+        return result
+
+    def plot_histogram(self, histogram, clip_lo, clip_hi, node_name, epoch, truemin, truemax):
+        os.makedirs(f"./histograms/{epoch}", exist_ok=True)
+        plt.figure()
+        # Convert parameters to scalar values using .item()
+        truemin = truemin.item()
+        truemax = truemax.item()
+        clip_lo = clip_lo.item()
+        clip_hi = clip_hi.item()
+
+        # Now use the scalar values in torch.linspace
+        bin_edges = torch.linspace(truemin, truemax, len(histogram) + 1)
+
+        plt.bar(bin_edges[:-1].numpy(), histogram.numpy(), width=(truemax-truemin)/len(histogram), align='edge', color='blue')
+        plt.axvline(x=clip_lo, color='red', label='Low Clip')
+        plt.axvline(x=clip_hi, color='green', label='High Clip')
+        plt.title(f"Histogram for Node {node_name} Epoch {epoch}")
+        plt.xlabel('Activation Values')
+        plt.ylabel('Counts')
+        plt.legend()
+        plt.savefig(f"./histograms/{epoch}/{node_name}_histogram.png")
+        plt.close()
+
