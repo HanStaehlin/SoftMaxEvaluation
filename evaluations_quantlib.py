@@ -30,52 +30,60 @@ from quantlib.algorithms.pact.pact_ops import (PACTITAMax,
                                                PACTIntegerSoftmax)
 
 
-def run_softmax_comparisons(num_iterations=1):
-  """
+def run_softmax_comparisons(num_iterations = 1):
+    """
   Runs softmax comparisons with different random inputs and prints results.
 
   Args:
       num_iterations: Number of iterations to run the comparison (default: 10).
   """
-  for _ in range(num_iterations):
-    N = 1024
+    for _ in range(num_iterations):
+        N = 1024
 
-    # Generate different random input variants:
-    input_variants = [
-        # Uniform distribution 
-        ["Random",torch.rand(1, N, N) * 255 - 128],
-        # Normal distribution 
-        ["Normal",torch.randn(1, N, N)],
-        # Sparse inputs with most values near 0
-        ["Sparse",torch.randint(-5, 5, size=(1, N, N), dtype=torch.float32) ],
-    ]
+        # Generate different random input variants:
+        input_variants = [
+            # Uniform distribution
+            ["Random", torch.rand(1, N, N) * 255 - 128],
+            # Normal distribution
+            ["Normal", torch.randn(1, N, N)],
+            # Sparse inputs with most values near 0
+            ["Sparse", torch.randint(-5, 5, size = (1, N, N), dtype = torch.float32)],
+        ]
 
-    for input_data in input_variants:
-      input = input_data[1].unsqueeze(0).float()
+        for input_data in input_variants:
+            input = input_data[1].unsqueeze(0).float()
+            
 
-      ITAMax = PACTITAMax()
-      Softmax = PACTSoftmax()
-      IntegerSoftmax = PACTIntegerSoftmax()
+            log2e = np.log2(np.exp(1))
+            eps = 8 / (2**8 * log2e)
 
-      ITAmax_softmax = ITAMax.forward(input).detach().numpy().squeeze(axis=0)
-      softmax = Softmax.forward(input).detach().numpy().squeeze(axis=0)
-      integer_softmax = IntegerSoftmax.forward(input).detach().numpy().squeeze(axis=0)
-      ITAMax.started = torch.tensor(1)
 
-      log2e = np.log2(np.exp(1))
-      eps = 8 / (2**8*log2e)
-      ITAMax.set_eps_in(torch.tensor((eps, )))
-      ITAMax_fake_quantized = ITAMax.forward(input).detach().numpy().squeeze(axis=0)
+            IntegerSoftmax = PACTIntegerSoftmax(eps_in = torch.tensor((eps,)))
+            ITAMax = PACTITAMax()
+            Softmax = PACTSoftmax()
+            ITAmax_softmax = ITAMax.forward(input).detach().numpy().squeeze(axis = 0)
+            softmax = Softmax.forward(input).detach().numpy().squeeze(axis = 0)
+            integer_softmax = IntegerSoftmax.forward(input).detach().numpy().squeeze(axis = 0)
+            ITAMax.started = torch.tensor(1)
 
-      print(f"\nInput Variant: {input_data[0]}")
-      print(f"Softmax shape: {softmax.shape}")
 
-      print(f" L2 Softmax Differences:")
-      print(f"  Real Softmax              - ITAMax Softmax                  : {np.linalg.norm(softmax[0] - ITAmax_softmax[0], 2):.10}")
-      print(f"  Real Softmax              - ITAMax Fake Quantized Softmax    : {np.linalg.norm(softmax[0] - ITAMax_fake_quantized[0], 2):.10}")
-      print(f"  Real Softmax              - Integer Softmax                 : {np.linalg.norm(softmax[0] - integer_softmax[0], 2):.10}")
+            ITAMax.set_eps_in(torch.tensor((eps,)))
+            ITAMax_fake_quantized = ITAMax.forward(input).detach().numpy().squeeze(axis = 0)
+
+            print(f"\nInput Variant: {input_data[0]}")
+            print(f"Softmax shape: {softmax.shape}")
+
+            print(f" L2 Softmax Differences:")
+            print(
+                f"  Real Softmax              - ITAMax Softmax                  : {np.linalg.norm(softmax[0] - ITAmax_softmax[0], 2):.10}"
+            )
+            print(
+                f"  Real Softmax              - ITAMax Fake Quantized Softmax    : {np.linalg.norm(softmax[0] - ITAMax_fake_quantized[0], 2):.10}"
+            )
+            print(
+                f"  Real Softmax              - Integer Softmax                 : {np.linalg.norm(softmax[0] - integer_softmax[0], 2):.10}"
+            )
 
 
 if __name__ == "__main__":
-  run_softmax_comparisons()
-
+    run_softmax_comparisons()

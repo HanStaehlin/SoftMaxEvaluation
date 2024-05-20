@@ -206,25 +206,26 @@ class HistogramInterpreter:
                 m = self.modules[node.target]
                 result = m(*self.load_arg(node.args), **self.load_arg(node.kwargs))
                 if isinstance(m, qla.pact._PACTActivation):
-                    self.plot_histogram(m.histogram, m.clip_lo, m.clip_hi, node.name, epoch, m.truemin, m.truemax)
+                    self.plot_histogram(m.histogram, m.clip_lo, m.clip_hi, node.name, epoch, m.truemin, m.truemax, m.running_mean)
             self.env[node.name] = result
         return result
 
-    def plot_histogram(self, histogram, clip_lo, clip_hi, node_name, epoch, truemin, truemax):
+    def plot_histogram(self, histogram, clip_lo, clip_hi, node_name, epoch, truemin, truemax, running_mean):
         os.makedirs(f"./histograms/{epoch}", exist_ok=True)
         plt.figure()
-        # Convert parameters to scalar values using .item()
         truemin = truemin.item()
         truemax = truemax.item()
         clip_lo = clip_lo.item()
         clip_hi = clip_hi.item()
+        running_mean = running_mean.item()
 
-        # Now use the scalar values in torch.linspace
+
         bin_edges = torch.linspace(truemin, truemax, len(histogram) + 1)
 
         plt.bar(bin_edges[:-1].numpy(), histogram.numpy(), width=(truemax-truemin)/len(histogram), align='edge', color='blue')
         plt.axvline(x=clip_lo, color='red', label='Low Clip')
         plt.axvline(x=clip_hi, color='green', label='High Clip')
+        plt.axvline(x=running_mean, color='black', label='Mean')
         plt.title(f"Histogram for Node {node_name} Epoch {epoch}")
         plt.xlabel('Activation Values')
         plt.ylabel('Counts')

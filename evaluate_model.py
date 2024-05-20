@@ -3,6 +3,7 @@ import ipdb
 import os
 from functools import partial
 from typing import Callable, List
+import math
 
 import torch
 import torch.nn as nn
@@ -32,8 +33,16 @@ from quantlib.editing.fx.util.tracing import LeafTracer
 from utils import _getAdhocEpsList
 from fx import SimpleInterpreter, HistogramInterpreter
 
+#Flags
+Plot_Histograms = False  #Overwrites old Histograms, takes a long time
+Plot_Histograms_Integer = False
+Print_Original_Model = False
+Print_Fake_Quantized_Model = False
+Print_True_Quantized_Model = False
+Verbose_Evaluations = False #Takes more time, for sanity checks on the model
 # Hyperparameters
-N_LEVELS_ACTS = 2**8
+Quantization_Mode = "I-BERT"  # I-BERT, ITA, ITA-Partial
+N_LEVELS_ACTS = 2**4
 UPPER_PERCENTILE = 99.9
 LOWER_PERCENTILE = 0.1
 EPOCHS = 5
@@ -137,7 +146,7 @@ model_dataset_configs = {
 }
 
 softmax_cfg = {
-    "mode": "I-BERT",
+    "mode": Quantization_Mode,  #I-BERT, ITA, ITA-Partial
     "n_levels": N_LEVELS_ACTS,
     "init_clip": "percentile",  #try out
     "leaky": 0.0,
@@ -145,9 +154,10 @@ softmax_cfg = {
     "lower_percentile": LOWER_PERCENTILE,
     "num_bins": 2**12,
     "rounding": True,
-    "tqt": True,
+    "tqt": False,
     "upper_percentile": UPPER_PERCENTILE,
     "act_kind": "identity",
+    "symm": False,
 }
 
 
@@ -347,20 +357,25 @@ def quantize_softmax(config, dataloader, n_train = 10, n_test = 128, epochs = 1,
 
     print("=== Original Model ===")
     # print(traced)
-    # traced.graph.print_tabular()
-    #eval_model(config, traced, n_test = n_test)
+    if (Print_Original_Model):
+        traced.graph.print_tabular()
+    if (Verbose_Evaluations):
+        eval_model(config, traced, n_test = n_test)
 
     print("=== Modularize Activations ===")
     traced_mod = ModularizeActivationsPass().apply(traced)
+    print("=== Approximate Softmax ===")
     traced_approx = ApproximateSoftmaxPass(**softmax_cfg).apply(traced_mod)
     traced_approx = PACT_symbolic_trace(traced_approx)
 
     # print(traced_approx)
     # print(_print_tabular(traced_approx))
-    #eval_model(config, traced_approx, n_test = n_test)
+    if (Verbose_Evaluations):
+        eval_model(config, traced_approx, n_test = n_test)
 
     train_activations(config, n_train, n_test, dataset, device, traced_approx, dataloader)
-
+    if (Print_Fake_Quantized_Model):
+        traced.graph.print_tabular()
     return traced_approx
 
 
@@ -405,17 +420,15 @@ def train_activations(config, n_train, n_test, dataset, device, traced, dataload
         traced.train()
         correct = 0
         total = 0
-
-        hi = HistogramInterpreter(traced)
-        batch=next(iter(dataloader_train_batch))
-        #hi.propagate(epoch, batch["input_ids"], batch["attention_mask"], batch["token_type_ids"])
+        if(Plot_Histograms):
+            hi = HistogramInterpreter(traced)
+            batch=next(iter(dataloader_train_batch))
+            hi.propagate(epoch, batch["input_ids"], batch["attention_mask"], batch["token_type_ids"])
         with tqdm(total = num_train_examples, desc = "Train", leave = False) as pbar_batch:
             for batch in dataloader_train_batch:
                 # Ensure all input tensors are moved to the correct device
                 inputs = {k: v.to(device) if isinstance(v, torch.Tensor) else v for k, v in batch.items()}
                 labels = inputs.pop('labels')
-
-                # WIESEP: For debugging purposes, we can use the SimpleInterpreter to check the intermediate activations and output of the model
                 outputs = traced(inputs["input_ids"], inputs["attention_mask"], inputs["token_type_ids"])
                 #outputs = sp.propagate(inputs["input_ids"], inputs["attention_mask"], inputs["token_type_ids"])
 
@@ -480,29 +493,48 @@ if __name__ == "__main__":
     model_fq = quantize_softmax(config, dataloader)
     model_tq = IntergerizePass(model_fq)
 
-    print("=== Evaluating Original Model ===")
-    eval_model(config, model, n_test = -1)
+    results = {
+        "original": eval_model(config, model, n_test = -1),
+        "fake_quant": eval_model(config, model_fq, n_test = -1),
+        "true_quant": eval_model(config, model_tq, n_test = -1)
+    }
 
-    print("=== Evaluating Fake-Quant Model ===")
-    eval_model(config, model_fq, n_test = -1)
+    file_path = "quantization_results_IBert4.txt"
 
-    print("=== Evaluating True-Quant Model ===")
-    eval_model(config, model_tq, n_test = -1)
+    with open(file_path, "a") as file:
+        file.write(
+            f"Dataset: {config['dataset_name']}, Model: {config['model_name']}, Mode: {Quantization_Mode}, Bits: {math.log2(N_LEVELS_ACTS)}, Clip_Bounds_Sym: {softmax_cfg['symm']} \n"
+        )
+        selected_metric_key = config['metrics']
+        for model_type, result in results.items():
+            file.write(f"{model_type.capitalize()} Model: {selected_metric_key.capitalize()}: {result}\n")
+    print("Results saved to:", file_path)
 
+    #model_tq.graph.print_tabular()
     sp = SimpleInterpreter(model_tq)
-    batch=next(iter(dataloader))
+    batch = next(iter(dataloader))
     sp.propagate(batch["input_ids"], batch["attention_mask"], batch["token_type_ids"])
     from pprint import pprint
-    pprint([{k: [v.min(), v.max(),v]} for k, v in sp.env.items() if "softmax" in k])
+    pprint([{k: [v.min(), v.max(), v[v > -128].mean()]} for k, v in sp.env.items() if "integerize_signed_act" in k])
 
-    plt.figure(figsize=(10, 6))
-    for k, v in sp.env.items():
-        if "softmax" in k:
-            plt.hist(v[v>-128].flatten().numpy(), bins=30, color='blue', alpha=0.7)  
-    plt.xlabel('Value')
-    plt.ylabel('Frequency')
-    plt.title('Histogram of Tensor Values')
-    # Save the plot to a file
-    plt.savefig('tensor_histogram.png')
-    plt.close()  # Close the plot explicitly after savingq
-    plt.show()  # Display the plot
+    def plot_histogram(histogram, node_name, truemin, truemax, running_mean):
+        os.makedirs(f"./histograms_tq/", exist_ok = True)
+        plt.figure()
+        truemin = truemin.item()
+        truemax = truemax.item()
+        running_mean = running_mean.item()
+        plt.hist(histogram, bins = N_LEVELS_ACTS, color = 'blue')
+        plt.axvline(x = running_mean, color = 'black', label = 'Mean')
+        plt.title(f"Histogram for Node {node_name}")
+        plt.xlabel('Activation Values')
+        plt.ylabel('Counts')
+        plt.legend()
+        plt.savefig(f"./histograms_tq/{node_name}_histogram.png")
+        plt.close()
+        plt.figure(figsize = (10, 6))
+
+    if(Plot_Histograms_Integer):
+        for k, v in sp.env.items():
+            if "integerize_signed_act" in k:
+                v = v[v > -(N_LEVELS_ACTS // 2)]
+                plot_histogram(v, k, v.min(), v.max(), v.mean())

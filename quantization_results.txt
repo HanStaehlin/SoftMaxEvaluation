@@ -1,0 +1,36 @@
+Dataset: sst2, Model: Alireza1044/mobilebert_sst2, Mode: I-BERT, Bits: 64
+Original Model: Accuracy: 0.895
+Fake_quant Model: Accuracy: 0.895
+True_quant Model: Accuracy: 0.905
+Dataset: sst2, Model: Alireza1044/mobilebert_sst2, Mode: I-BERT, Bits: 64
+Original Model: Accuracy: 0.895
+Fake_quant Model: Accuracy: 0.9
+True_quant Model: Accuracy: 0.895
+Dataset: sst2, Model: Alireza1044/mobilebert_sst2, Mode: I-BERT, Bits: 5.0
+Original Model: Accuracy: 0.895
+Fake_quant Model: Accuracy: 0.855
+True_quant Model: Accuracy: 0.84
+Dataset: sst2, Model: Alireza1044/mobilebert_sst2, Mode: I-BERT, Bits: 5.0
+Original Model: Accuracy: 0.895
+Fake_quant Model: Accuracy: 0.89
+True_quant Model: Accuracy: 0.84
+Dataset: sst2, Model: Alireza1044/mobilebert_sst2, Mode: I-BERT, Bits: 4.0
+Original Model: Accuracy: 0.895
+Fake_quant Model: Accuracy: 0.725
+True_quant Model: Accuracy: 0.635
+Dataset: sst2, Model: Alireza1044/mobilebert_sst2, Mode: I-BERT, Bits: 4.0
+Original Model: Accuracy: 0.895
+Fake_quant Model: Accuracy: 0.505
+True_quant Model: Accuracy: 0.505
+Dataset: sst2, Model: Alireza1044/mobilebert_sst2, Mode: I-BERT, Bits: 4.0
+Original Model: Accuracy: 0.895
+Fake_quant Model: Accuracy: 0.505
+True_quant Model: Accuracy: 0.505
+Dataset: sst2, Model: Alireza1044/mobilebert_sst2, Mode: I-BERT, Bits: 4.0, Clip_Bounds_Sym: False 
+Original Model: Accuracy: 0.895
+Fake_quant Model: Accuracy: 0.745
+True_quant Model: Accuracy: 0.665
+Dataset: sst2, Model: Alireza1044/mobilebert_sst2, Mode: I-BERT, Bits: 4.0, Clip_Bounds_Sym: False 
+Original Model: Accuracy: 0.895
+Fake_quant Model: Accuracy: 0.715
+True_quant Model: Accuracy: 0.72
