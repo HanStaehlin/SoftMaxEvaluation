@@ -35,14 +35,14 @@ from fx import SimpleInterpreter, HistogramInterpreter
 
 #Flags
 Plot_Histograms = False  #Overwrites old Histograms, takes a long time
-Plot_Histograms_Integer = False
+Plot_Histograms_Integer = True
 Print_Original_Model = False
 Print_Fake_Quantized_Model = False
 Print_True_Quantized_Model = False
 Verbose_Evaluations = False #Takes more time, for sanity checks on the model
 # Hyperparameters
-Quantization_Mode = "I-BERT"  # I-BERT, ITA, ITA-Partial
-N_LEVELS_ACTS = 2**4
+Quantization_Mode = "ITA"  # I-BERT, ITA, ITA-Partial
+N_LEVELS_ACTS = 2**8
 UPPER_PERCENTILE = 99.9
 LOWER_PERCENTILE = 0.1
 EPOCHS = 5
@@ -159,7 +159,16 @@ softmax_cfg = {
     "act_kind": "identity",
     "symm": False,
 }
+def set_seeds(seed=42):
+    """ Set seeds for reproducibility. """
+    np.random.seed(seed)    # NumPy random generator
+    torch.manual_seed(seed) # PyTorch random generator
 
+
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True 
+    torch.backends.cudnn.benchmark = False 
 
 def _print_tabular(gm: GraphModule):
     """
@@ -465,11 +474,26 @@ def IntergerizePass(model):
     model = IntegerizeSoftmaxPass().apply(model)
     return model
 
+def plot_histogram(histogram, node_name, truemin, truemax, running_mean):
+    os.makedirs(f"./histograms_tq/", exist_ok = True)
+    plt.figure()
+    truemin = truemin.item()
+    truemax = truemax.item()
+    running_mean = running_mean.item()
+    plt.hist(histogram, bins = N_LEVELS_ACTS, color = 'blue')
+    plt.axvline(x = running_mean, color = 'black', label = 'Mean')
+    plt.title(f"Histogram for Node {node_name}")
+    plt.xlabel('Activation Values')
+    plt.ylabel('Counts')
+    plt.legend()
+    plt.savefig(f"./histograms_tq/{node_name}_histogram.png")
+    plt.close()
+    plt.figure(figsize = (10, 6))
 
 if __name__ == "__main__":
     os.environ["TRANSFORMERS_VERBOSITY"] = "error"
     logging.set_verbosity_error()
-
+    set_seeds()
     parser = argparse.ArgumentParser(description = 'Test different MobileBERT models and datasets.')
     parser.add_argument('--config',
                         type = str,
@@ -494,12 +518,12 @@ if __name__ == "__main__":
     model_tq = IntergerizePass(model_fq)
 
     results = {
-        "original": eval_model(config, model, n_test = -1),
-        "fake_quant": eval_model(config, model_fq, n_test = -1),
-        "true_quant": eval_model(config, model_tq, n_test = -1)
+        "original": eval_model(config, model, n_test = 200),
+        "fake_quant": eval_model(config, model_fq, n_test = 200),
+        "true_quant": eval_model(config, model_tq, n_test = 200)
     }
 
-    file_path = "quantization_results_IBert4.txt"
+    file_path = "quantization_results.txt"
 
     with open(file_path, "a") as file:
         file.write(
@@ -516,22 +540,6 @@ if __name__ == "__main__":
     sp.propagate(batch["input_ids"], batch["attention_mask"], batch["token_type_ids"])
     from pprint import pprint
     pprint([{k: [v.min(), v.max(), v[v > -128].mean()]} for k, v in sp.env.items() if "integerize_signed_act" in k])
-
-    def plot_histogram(histogram, node_name, truemin, truemax, running_mean):
-        os.makedirs(f"./histograms_tq/", exist_ok = True)
-        plt.figure()
-        truemin = truemin.item()
-        truemax = truemax.item()
-        running_mean = running_mean.item()
-        plt.hist(histogram, bins = N_LEVELS_ACTS, color = 'blue')
-        plt.axvline(x = running_mean, color = 'black', label = 'Mean')
-        plt.title(f"Histogram for Node {node_name}")
-        plt.xlabel('Activation Values')
-        plt.ylabel('Counts')
-        plt.legend()
-        plt.savefig(f"./histograms_tq/{node_name}_histogram.png")
-        plt.close()
-        plt.figure(figsize = (10, 6))
 
     if(Plot_Histograms_Integer):
         for k, v in sp.env.items():

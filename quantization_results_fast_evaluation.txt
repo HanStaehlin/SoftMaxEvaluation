@@ -1,9 +1,2 @@
-Dataset: sst2, Model: Alireza1044/mobilebert_sst2, Mode: I-BERT, Bits: 4.0, Clip_Bounds_Sym: False 
-Original Model: Accuracy: 0.895
-Fake_quant Model: Accuracy: 0.745
-True_quant Model: Accuracy: 0.64
-Dataset: sst2, Model: Alireza1044/mobilebert_sst2, Mode: I-BERT, Bits: 4.0, Clip_Bounds_Sym: False 
-Original Model: Accuracy: 0.9036697247706422
-Fake_quant Model: Accuracy: 0.75
-True_quant Model: Accuracy: 0.6743119266055045
+
 
