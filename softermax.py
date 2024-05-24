@@ -3,7 +3,7 @@ import math
 import numpy as np
 import torch.nn as nn
 
-
+#Not Functional
 class SofterMax(nn.Module):
 
     def __init__(self, version=1):

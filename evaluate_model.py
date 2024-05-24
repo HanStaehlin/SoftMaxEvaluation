@@ -38,6 +38,11 @@ Plot_Histograms = False  #Overwrites old Histograms, takes a long time
 Plot_Histograms_Integer = True
 Print_Original_Model = False
 Print_Fake_Quantized_Model = False
+
+
+
+
+
 Print_True_Quantized_Model = False
 Verbose_Evaluations = False #Takes more time, for sanity checks on the model
 # Hyperparameters
@@ -154,10 +159,10 @@ softmax_cfg = {
     "lower_percentile": LOWER_PERCENTILE,
     "num_bins": 2**12,
     "rounding": True,
-    "tqt": False,
+    "tqt": True,
     "upper_percentile": UPPER_PERCENTILE,
     "act_kind": "identity",
-    "symm": False,
+    "symm": True,
 }
 def set_seeds(seed=42):
     """ Set seeds for reproducibility. """
@@ -167,8 +172,8 @@ def set_seeds(seed=42):
 
     torch.cuda.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
-    torch.backends.cudnn.deterministic = True 
-    torch.backends.cudnn.benchmark = False 
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
 def _print_tabular(gm: GraphModule):
     """
@@ -523,7 +528,7 @@ if __name__ == "__main__":
         "true_quant": eval_model(config, model_tq, n_test = 200)
     }
 
-    file_path = "quantization_results.txt"
+    file_path = "quantization_results_IBert5_fast.txt"
 
     with open(file_path, "a") as file:
         file.write(

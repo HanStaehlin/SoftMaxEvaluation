@@ -19,20 +19,6 @@ from quantlib.editing.fx.util import gm_modules, module_of_node
 
 from quantlib.editing.fx.passes.pact.pact_util import PACT_OPS, PACT_OPS_INCLUSIVE, PACTTracer, PACT_symbolic_trace, PACT_symbolic_trace_inclusive
 
-quant_cfg = {
-    "mul": torch.tensor(255),
-    "add": torch.tensor(0),
-    "n_levels": 2**16,
-    "D": torch.tensor(1,),
-}
-
-dequant_cfg = {
-    "mul": torch.tensor(1),
-    "add": torch.tensor(0),
-    "n_levels": 2**16,
-    "D": torch.tensor(10,),
-}
-
 
 class Observer(nn.Module):
     """
@@ -75,7 +61,7 @@ def integerize_softmax_fun(gm: fx.GraphModule,
                            match: Match,
                            mode: Literal["I-BERT", "ITA",
                                          'ITA-Partial'] = "I-BERT",
-                           D=2**12,
+                           D=2**24,
                            export_node=False):
     modules = gm_modules(gm)
     matched_nodes = [
@@ -112,7 +98,7 @@ def integerize_softmax_fun(gm: fx.GraphModule,
     return new_softmax
 
 class IntegerizeSoftmaxPass(SequentialPass):
-    def __init__(self, D=2**12, export_softmax_node = False , **kwargs):
+    def __init__(self, D=2**24, export_softmax_node = False , **kwargs):
         passes = []
 
         pattern = nn.Sequential(PACTSoftmax())
@@ -132,13 +118,12 @@ def replSoftmax(gm: fx.GraphModule, match: Match, mode: str, **kwargs):
         n_levels = kwargs['n_levels']
     else:
         n_levels = 2**8
-
     if mode == "I-BERT":
         replacement_class = nn.Sequential(PACTAsymmetricAct(**kwargs), PACTSoftmax(n_levels))
     elif mode == 'ITA':
         replacement_class = nn.Sequential(PACTAsymmetricAct(**kwargs), PACTITAMax(n_levels))
     elif mode == 'ITA-Partial':
-        replacement_class = nn.Sequential(PACTAsymmetricAct(**kwargs), PACTITAPartialMax(n_levels))
+        replacement_class = nn.Sequential(PACTAsymmetricAct(**kwargs), PACTITAPartialMax(n_levels=n_levels))
 
     return replacement_class
 
