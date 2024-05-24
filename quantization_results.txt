@@ -214,3 +214,7 @@ Dataset: sst2, Model: Alireza1044/mobilebert_sst2, Mode: ITA, Bits: 8.0, Clip_Bo
 Original Model: Accuracy: 0.895
 Fake_quant Model: Accuracy: 0.895
 True_quant Model: Accuracy: 0.9
+Dataset: sst2, Model: Alireza1044/mobilebert_sst2, Mode: ITA-Partial, Bits: 8.0, Clip_Bounds_Sym: True 
+Original Model: Accuracy: 0.895
+Fake_quant Model: Accuracy: 0.9
+True_quant Model: Accuracy: 0.9

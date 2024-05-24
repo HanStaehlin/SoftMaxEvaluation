@@ -121,9 +121,9 @@ def replSoftmax(gm: fx.GraphModule, match: Match, mode: str, **kwargs):
     if mode == "I-BERT":
         replacement_class = nn.Sequential(PACTAsymmetricAct(**kwargs), PACTSoftmax(n_levels))
     elif mode == 'ITA':
-        replacement_class = nn.Sequential(PACTAsymmetricAct(**kwargs), PACTITAMax(n_levels))
+        replacement_class = nn.Sequential(PACTITAMax(n_levels))
     elif mode == 'ITA-Partial':
-        replacement_class = nn.Sequential(PACTAsymmetricAct(**kwargs), PACTITAPartialMax(n_levels=n_levels))
+        replacement_class = nn.Sequential(PACTITAPartialMax(n_levels=n_levels))
 
     return replacement_class
 
@@ -158,6 +158,8 @@ class CustomAnnotateEpsPass(FxPass):
 
                 if (isinstance(m, PACTSoftmax) or isinstance(m, PACTITAMax) or isinstance(m, PACTITAPartialMax)):
                     eps_in = [[i.meta['quant'].eps_out for i in node.args if isinstance(i, fx.Node)], {}]
+                    if isinstance(m, PACTITAMax) or isinstance(m, PACTITAPartialMax):
+                        eps_in = [[torch.Tensor((1.0,))], {}]
                     eps_out = torch.Tensor((1. / (m.n_levels - 1.),))
                     if self.verbose:
                         print(f" - {node.name:<40} ({m.__class__.__name__:<20}) {eps_in} -> {eps_out}")

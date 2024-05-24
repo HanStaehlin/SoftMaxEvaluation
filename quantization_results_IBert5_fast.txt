@@ -66,3 +66,7 @@ Dataset: mrpc, Model: Alireza1044/mobilebert_mrpc, Mode: I-BERT, Bits: 6.0, Clip
 Original Model: F1: 0.8972602739726028
 Fake_quant Model: F1: 0.8701754385964913
 True_quant Model: F1: 0.32727272727272727
+Dataset: sst2, Model: Alireza1044/mobilebert_sst2, Mode: ITA, Bits: 8.0, Clip_Bounds_Sym: True 
+Original Model: Accuracy: 0.895
+Fake_quant Model: Accuracy: 0.865
+True_quant Model: Accuracy: 0.865

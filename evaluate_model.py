@@ -46,7 +46,7 @@ Print_Fake_Quantized_Model = False
 Print_True_Quantized_Model = False
 Verbose_Evaluations = False #Takes more time, for sanity checks on the model
 # Hyperparameters
-Quantization_Mode = "ITA"  # I-BERT, ITA, ITA-Partial
+Quantization_Mode = "ITA-Partial"  # I-BERT, ITA, ITA-Partial
 N_LEVELS_ACTS = 2**8
 UPPER_PERCENTILE = 99.9
 LOWER_PERCENTILE = 0.1
@@ -528,7 +528,7 @@ if __name__ == "__main__":
         "true_quant": eval_model(config, model_tq, n_test = 200)
     }
 
-    file_path = "quantization_results_IBert5_fast.txt"
+    file_path = "quantization_results.txt"
 
     with open(file_path, "a") as file:
         file.write(
