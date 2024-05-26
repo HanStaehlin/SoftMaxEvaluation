@@ -47,12 +47,11 @@ class NormalizeSoftmaxOutput(nn.Module):
         # Convert integer output to float for division operation
         x_float = x.float()
 
-        normalized_output = x_float/(self.n_levels-1.)
+        #normalized_output = x_float/(self.n_levels-1.)
         # Calculate the sum of the softmax outputs across the specified dimension
-        # sum_x = torch.sum(x_float, dim=self.dim, keepdim=True)
-
+        sum_x = torch.sum(x_float, dim=self.dim, keepdim=True)
         # # Normalize each element by the sum to get probabilities that sum to 1
-        # normalized_output = x_float / sum_x
+        normalized_output = x_float / sum_x
 
         return normalized_output
 
@@ -121,9 +120,9 @@ def replSoftmax(gm: fx.GraphModule, match: Match, mode: str, **kwargs):
     if mode == "I-BERT":
         replacement_class = nn.Sequential(PACTAsymmetricAct(**kwargs), PACTSoftmax(n_levels))
     elif mode == 'ITA':
-        replacement_class = nn.Sequential(PACTITAMax(n_levels))
+        replacement_class = nn.Sequential(PACTAsymmetricAct(**kwargs),PACTITAMax(n_levels))
     elif mode == 'ITA-Partial':
-        replacement_class = nn.Sequential(PACTITAPartialMax(n_levels=n_levels))
+        replacement_class = nn.Sequential(PACTAsymmetricAct(**kwargs),PACTITAPartialMax(n_levels=n_levels))
 
     return replacement_class
 
@@ -159,7 +158,8 @@ class CustomAnnotateEpsPass(FxPass):
                 if (isinstance(m, PACTSoftmax) or isinstance(m, PACTITAMax) or isinstance(m, PACTITAPartialMax)):
                     eps_in = [[i.meta['quant'].eps_out for i in node.args if isinstance(i, fx.Node)], {}]
                     if isinstance(m, PACTITAMax) or isinstance(m, PACTITAPartialMax):
-                        eps_in = [[torch.Tensor((1.0,))], {}]
+                        if not eps_in:  # Check if eps_in is empty
+                            eps_in = [[torch.Tensor((1.0,))], {}]
                     eps_out = torch.Tensor((1. / (m.n_levels - 1.),))
                     if self.verbose:
                         print(f" - {node.name:<40} ({m.__class__.__name__:<20}) {eps_in} -> {eps_out}")

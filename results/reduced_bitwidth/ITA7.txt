@@ -1,0 +1,16 @@
+Dataset: sst2, Model: Alireza1044/mobilebert_sst2, Mode: ITA, Bits: 7.0, Clip_Bounds_Sym: True 
+Original Model: Accuracy: skipped
+Fake_quant Model: Accuracy: 0.8899082568807339
+True_quant Model: Accuracy: 0.9094036697247706
+Dataset: cola, Model: Alireza1044/mobilebert_cola, Mode: ITA, Bits: 7.0, Clip_Bounds_Sym: True 
+Original Model: Mcc: skipped
+Fake_quant Model: Mcc: 0.510920933232839
+True_quant Model: Mcc: 0.5290831606897504
+Dataset: rte, Model: Alireza1044/mobilebert_rte, Mode: ITA, Bits: 7.0, Clip_Bounds_Sym: True 
+Original Model: Accuracy: skipped
+Fake_quant Model: Accuracy: 0.5992779783393501
+True_quant Model: Accuracy: 0.6534296028880866
+Dataset: mrpc, Model: Alireza1044/mobilebert_mrpc, Mode: ITA, Bits: 7.0, Clip_Bounds_Sym: True 
+Original Model: F1: skipped
+Fake_quant Model: F1: 0.49868766404199477
+True_quant Model: F1: 0.8811881188118812

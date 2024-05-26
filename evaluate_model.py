@@ -38,23 +38,19 @@ Plot_Histograms = False  #Overwrites old Histograms, takes a long time
 Plot_Histograms_Integer = True
 Print_Original_Model = False
 Print_Fake_Quantized_Model = False
-
-
-
-
-
 Print_True_Quantized_Model = False
 Verbose_Evaluations = False #Takes more time, for sanity checks on the model
 # Hyperparameters
+file_path = "results/reduced_bitwidth/Softer5.txt"
 Quantization_Mode = "ITA-Partial"  # I-BERT, ITA, ITA-Partial
-N_LEVELS_ACTS = 2**8
+N_LEVELS_ACTS = 2**5
 UPPER_PERCENTILE = 99.9
-LOWER_PERCENTILE = 0.1
+LOWER_PERCENTILE = 10
 EPOCHS = 5
 BATCH_SIZE = 1
 NumHiddenLayers = 1
 schedule = {1: "start", (EPOCHS - 1): ["freeze"]}
-actSchedule = {1: "start", (EPOCHS - 1): ["freeze"]}
+actSchedule = {3: "start", (EPOCHS - 1): ["freeze"]}
 epsSchedule = {(EPOCHS - 2): 'start'}
 
 fixed_max_length = 150  # Set a fixed max length for all inputs
@@ -405,7 +401,6 @@ def train_activations(config, n_train, n_test, dataset, device, traced, dataload
 
     act_list = [i for i in traced.modules() if isinstance(i, qla.pact._PACTActivation)]
     eps_list = [i for i in traced.modules() if isinstance(i, qla.pact._PACTEps)]
-
     actController = qla.pact.PACTActController(modules = act_list,
                                                schedule = actSchedule,
                                                init_clip_hi = 6.,
@@ -434,10 +429,6 @@ def train_activations(config, n_train, n_test, dataset, device, traced, dataload
         traced.train()
         correct = 0
         total = 0
-        if(Plot_Histograms):
-            hi = HistogramInterpreter(traced)
-            batch=next(iter(dataloader_train_batch))
-            hi.propagate(epoch, batch["input_ids"], batch["attention_mask"], batch["token_type_ids"])
         with tqdm(total = num_train_examples, desc = "Train", leave = False) as pbar_batch:
             for batch in dataloader_train_batch:
                 # Ensure all input tensors are moved to the correct device
@@ -469,6 +460,10 @@ def train_activations(config, n_train, n_test, dataset, device, traced, dataload
                     break
             pbar_batch.close()
             print(f'Train [{epoch+1}/{EPOCHS}] -- Accuracy: {accuracy:.4f}')
+        if(Plot_Histograms):
+            hi = HistogramInterpreter(traced)
+            batch=next(iter(dataloader_train_batch))
+            hi.propagate(epoch, batch["input_ids"], batch["attention_mask"], batch["token_type_ids"])    
         # ipdb.set_trace()
 
 
@@ -523,12 +518,12 @@ if __name__ == "__main__":
     model_tq = IntergerizePass(model_fq)
 
     results = {
-        "original": eval_model(config, model, n_test = 200),
-        "fake_quant": eval_model(config, model_fq, n_test = 200),
-        "true_quant": eval_model(config, model_tq, n_test = 200)
+        "original": "skipped", #eval_model(config, model, n_test = -1),
+        "fake_quant": eval_model(config, model_fq, n_test = -1),
+        "true_quant": eval_model(config, model_tq, n_test = -1)
     }
 
-    file_path = "quantization_results.txt"
+    
 
     with open(file_path, "a") as file:
         file.write(
@@ -551,3 +546,6 @@ if __name__ == "__main__":
             if "integerize_signed_act" in k:
                 v = v[v > -(N_LEVELS_ACTS // 2)]
                 plot_histogram(v, k, v.min(), v.max(), v.mean())
+            # if "softmax" in k:
+            #     v = v[v > -(N_LEVELS_ACTS // 2)]
+            #     plot_histogram(v, k, v.min(), v.max(), v.mean())
