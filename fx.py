@@ -177,6 +177,7 @@ class HistogramInterpreter:
         self.graph = mod.graph
         self.modules = dict(self.mod.named_modules())
         self.env = {}
+        self.plotter = HistogramPlotter()
 
     def load_arg(self, a):
         return torch.fx.graph.map_arg(a, lambda n: self.env[n.name])
@@ -207,38 +208,88 @@ class HistogramInterpreter:
                 m = self.modules[node.target]
                 result = m(*self.load_arg(node.args), **self.load_arg(node.kwargs))
                 if isinstance(m, qla.pact._PACTActivation):
-                    self.plot_histogram(m.histogram, m.clip_lo, m.clip_hi, node.name, epoch, m.truemin, m.truemax,
-                                        m.running_mean)
+                    self.plotter.add_histogram(m.histogram.clone(), m.clip_lo, m.clip_hi, node.name, epoch, m.truemin.clone(), m.truemax.clone(),
+                                        m.running_mean, m.max)
+                    if "23" in node.name:
+                        self.plotter.save_histograms()
+                    #m.histogram *= 0
                 if isinstance(m, qla.pact.PACTITAMax) or isinstance(m, qla.pact.PACTITAPartialMax):
                     m=m.act
-                    self.plot_histogram(m.histogram, m.clip_lo, m.clip_hi, node.name, epoch, m.truemin, m.truemax,
-                                        m.running_mean)
+                    self.plotter.add_histogram(m.histogram.clone(), m.clip_lo, m.clip_hi, node.name, epoch, m.truemin.clone(), m.truemax.clone(),
+                                        m.running_mean, m.max)
+                    if "23" in node.name:
+                        self.plotter.save_histograms()
+                    #m.histogram *= 0
             self.env[node.name] = result
         return result
 
-    def plot_histogram(self, histogram, clip_lo, clip_hi, node_name, epoch, truemin, truemax, running_mean):
-        os.makedirs(f"./histograms/{epoch}", exist_ok = True)
-        plt.figure()
-        truemin = truemin.item()
-        truemax = truemax.item()
-        clip_lo = clip_lo.item()
-        clip_hi = clip_hi.item()
-        running_mean = running_mean.item()
+class HistogramPlotter:
+    def __init__(self):
+        self.epoch_histograms = {}
 
-        bin_edges = torch.linspace(truemin, truemax, len(histogram) + 1)
+    def add_histogram(self, histogram, clip_lo, clip_hi, node_name, epoch, truemin, truemax, running_mean, max):
+        if epoch not in self.epoch_histograms:
+            self.epoch_histograms[epoch] = []
+        
+        self.epoch_histograms[epoch].append({
+            'histogram': histogram,
+            'clip_lo': clip_lo,
+            'clip_hi': clip_hi,
+            'node_name': node_name,
+            'truemin': truemin,
+            'truemax': truemax,
+            'running_mean': running_mean,
+            'max': max
+        })
 
-        plt.bar(bin_edges[:-1].numpy(),
-                histogram.numpy(),
-                width = (truemax - truemin) / len(histogram),
-                align = 'edge',
-                color = 'blue')
-        plt.axvline(x = clip_lo, color = 'red', label = 'Low Clip')
-        plt.axvline(x = clip_hi, color = 'green', label = 'High Clip')
-        plt.axvline(x = running_mean, color = 'black', label = 'Mean')
-        plt.axvline(x = truemax, color = 'orange', label = 'Max')
-        plt.title(f"Histogram for Node {node_name} Epoch {epoch}")
-        plt.xlabel('Activation Values')
-        plt.ylabel('Counts')
-        plt.legend()
-        plt.savefig(f"./histograms/{epoch}/{node_name}_histogram.png")
-        plt.close()
+    def save_histograms(self):
+        for epoch, histograms in self.epoch_histograms.items():
+            os.makedirs(f"./histograms/{epoch}", exist_ok=True)
+            num_histograms = len(histograms)
+            cols = 6
+            rows = (num_histograms + 1) // cols
+            
+            fig, axs = plt.subplots(rows, cols, figsize=(cols*5, rows * 5))
+            
+            # Ensure axs is always iterable
+            if num_histograms == 0:
+                axs = [axs]
+            else:
+                axs = axs.flatten()
+
+            for ax, hist_data in zip(axs, histograms):
+                histogram = hist_data['histogram']
+                clip_lo = hist_data['clip_lo'].item()
+                clip_hi = hist_data['clip_hi'].item()
+                node_name = hist_data['node_name']
+                truemin = hist_data['truemin'].item()
+                truemax = hist_data['truemax'].item()
+                running_mean = hist_data['running_mean'].item()
+                max_val = hist_data['max'].item()
+
+                bin_edges = torch.linspace(truemin, truemax, len(histogram) + 1)
+
+                ax.bar(bin_edges[:-1].numpy(),
+                       histogram.numpy(),
+                       width=(truemax - truemin) / len(histogram),
+                       align='edge',
+                       color='blue')
+                ax.axvline(x=clip_lo, color='red', label='Low Clip')
+                ax.axvline(x=clip_hi, color='green', label='High Clip')
+                ax.axvline(x=running_mean, color='black', label='Mean')
+                ax.axvline(x=max_val, color='orange', label='Max')
+                ax.set_title(f"Node {node_name}")
+                ax.set_xlabel('Activation Values')
+                ax.set_ylabel('Counts')
+                ax.legend()
+
+            # Remove any extra subplots
+            for ax in axs[len(histograms):]:
+                fig.delaxes(ax)
+
+            plt.tight_layout()
+            plt.suptitle(f"Histograms for Epoch {epoch}", y=1.02)
+            plt.savefig(f"./histograms/{epoch}/epoch_{epoch}_histograms.png")
+            plt.close()
+
+

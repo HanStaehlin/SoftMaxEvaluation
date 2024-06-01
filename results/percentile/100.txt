@@ -1,0 +1,60 @@
+Dataset: sst2, Model: Alireza1044/mobilebert_sst2, Mode: I-BERT, Bits: 8.0, Clip_Bounds_Sym: True, Percentile: 100
+Original Model: Accuracy: skipped
+Fake_quant Model: Accuracy: 0.9071100917431193
+True_quant Model: Accuracy: 0.9025229357798165
+Dataset: sst2, Model: Alireza1044/mobilebert_sst2, Mode: I-BERT, Bits: 8.0, Clip_Bounds_Sym: True, Percentile: 100
+Original Model: Accuracy: skipped
+Fake_quant Model: Accuracy: 0.9071100917431193
+True_quant Model: Accuracy: 0.9025229357798165
+Dataset: sst2, Model: Alireza1044/mobilebert_sst2, Mode: I-BERT, Bits: 8.0, Clip_Bounds_Sym: True, Percentile: 99.9
+Original Model: Accuracy: skipped
+Fake_quant Model: Accuracy: 0.9059633027522935
+True_quant Model: Accuracy: 0.9071100917431193
+Dataset: sst2, Model: Alireza1044/mobilebert_sst2, Mode: I-BERT, Bits: 8.0, Clip_Bounds_Sym: True, Percentile: 99 
+Original Model: Accuracy: skipped
+Fake_quant Model: Accuracy: 0.8979357798165137
+True_quant Model: Accuracy: 0.9025229357798165
+Dataset: sst2, Model: Alireza1044/mobilebert_sst2, Mode: I-BERT, Bits: 8.0, Clip_Bounds_Sym: True, Percentile: 95 
+Original Model: Accuracy: skipped
+Fake_quant Model: Accuracy: 0.8818807339449541
+True_quant Model: Accuracy: 0.9025229357798165
+Dataset: sst2, Model: Alireza1044/mobilebert_sst2, Mode: I-BERT, Bits: 8.0, Clip_Bounds_Sym: True, Percentile: 90
+Original Model: Accuracy: skipped
+Fake_quant Model: Accuracy: 0.8543577981651376
+True_quant Model: Accuracy: 0.9002293577981652
+Dataset: sst2, Model: Alireza1044/mobilebert_sst2, Mode: I-BERT, Bits: 8.0, Clip_Bounds_Sym: True, Percentile: 85
+Original Model: Accuracy: skipped
+Fake_quant Model: Accuracy: 0.8394495412844036
+True_quant Model: Accuracy: 0.9013761467889908
+Dataset: sst2, Model: Alireza1044/mobilebert_sst2, Mode: I-BERT, Bits: 8.0, Clip_Bounds_Sym: True, Percentile: 80
+Original Model: Accuracy: skipped
+Fake_quant Model: Accuracy: 0.8360091743119266
+True_quant Model: Accuracy: 0.9036697247706422
+Dataset: sst2, Model: Alireza1044/mobilebert_sst2, Mode: I-BERT, Bits: 8.0, Clip_Bounds_Sym: True, Percentile: 75 
+Original Model: Accuracy: skipped
+Fake_quant Model: Accuracy: 0.8211009174311926
+True_quant Model: Accuracy: 0.9013761467889908
+Dataset: sst2, Model: Alireza1044/mobilebert_sst2, Mode: I-BERT, Bits: 8.0, Clip_Bounds_Sym: True, Percentile: 70
+Original Model: Accuracy: skipped
+Fake_quant Model: Accuracy: 0.8073394495412844
+True_quant Model: Accuracy: 0.8990825688073395
+Dataset: sst2, Model: Alireza1044/mobilebert_sst2, Mode: I-BERT, Bits: 8.0, Clip_Bounds_Sym: True, Percentile: 60 
+Original Model: Accuracy: skipped
+Fake_quant Model: Accuracy: 0.7970183486238532
+True_quant Model: Accuracy: 0.9048165137614679
+Dataset: sst2, Model: Alireza1044/mobilebert_sst2, Mode: I-BERT, Bits: 8.0, Clip_Bounds_Sym: True, Percentile: 55
+Original Model: Accuracy: skipped
+Fake_quant Model: Accuracy: 0.7889908256880734
+True_quant Model: Accuracy: 0.9036697247706422
+Dataset: sst2, Model: Alireza1044/mobilebert_sst2, Mode: I-BERT, Bits: 8.0, Clip_Bounds_Sym: True, Percentile: 50 
+Original Model: Accuracy: skipped
+Fake_quant Model: Accuracy: 0.7775229357798165
+True_quant Model: Accuracy: 0.9025229357798165
+Dataset: sst2, Model: Alireza1044/mobilebert_sst2, Mode: I-BERT, Bits: 8.0, Clip_Bounds_Sym: True, Percentile: 45 
+Original Model: Accuracy: skipped
+Fake_quant Model: Accuracy: 0.7660550458715596
+True_quant Model: Accuracy: 0.8956422018348624
+Dataset: sst2, Model: Alireza1044/mobilebert_sst2, Mode: I-BERT, Bits: 8.0, Clip_Bounds_Sym: True, Percentile: 40
+Original Model: Accuracy: skipped
+Fake_quant Model: Accuracy: 0.7580275229357798
+True_quant Model: Accuracy: 0.8967889908256881

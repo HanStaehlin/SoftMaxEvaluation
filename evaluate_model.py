@@ -41,16 +41,17 @@ Print_Fake_Quantized_Model = False
 Print_True_Quantized_Model = False
 Verbose_Evaluations = False #Takes more time, for sanity checks on the model
 # Hyperparameters
-file_path = "results/reduced_bitwidth/Softer5.txt"
-Quantization_Mode = "ITA-Partial"  # I-BERT, ITA, ITA-Partial
-N_LEVELS_ACTS = 2**5
+file_path = "results/bias_shift/IBertV4.txt"
+Quantization_Mode = "I-BERT"  # I-BERT, ITA, ITA-Partial
+N_LEVELS_ACTS = 2**8
 UPPER_PERCENTILE = 99.9
 LOWER_PERCENTILE = 10
 EPOCHS = 5
 BATCH_SIZE = 1
+N_TRAIN = 10
 NumHiddenLayers = 1
 schedule = {1: "start", (EPOCHS - 1): ["freeze"]}
-actSchedule = {3: "start", (EPOCHS - 1): ["freeze"]}
+actSchedule = {1: "start", (EPOCHS - 1): ["freeze"]}
 epsSchedule = {(EPOCHS - 2): 'start'}
 
 fixed_max_length = 150  # Set a fixed max length for all inputs
@@ -155,10 +156,10 @@ softmax_cfg = {
     "lower_percentile": LOWER_PERCENTILE,
     "num_bins": 2**12,
     "rounding": True,
-    "tqt": True,
+    "tqt": False,
     "upper_percentile": UPPER_PERCENTILE,
     "act_kind": "identity",
-    "symm": True,
+    "symm": False,
 }
 def set_seeds(seed=42):
     """ Set seeds for reproducibility. """
@@ -500,9 +501,17 @@ if __name__ == "__main__":
                         help = 'Configuration key for model and dataset',
                         required = False,
                         default = 'mobilebert_sst2')
+    parser.add_argument('--bits',
+                    type=int,
+                    help='Number of bits for quantization',
+                    required=False,
+                    default=8)
+    
     args = parser.parse_args()
-
+    
     config = model_dataset_configs[args.config]
+    N_LEVELS_ACTS = 2**args.bits
+    softmax_cfg["n_levels"] = N_LEVELS_ACTS
 
     print(f"Quantizing model for {config['model_name']} on {config['dataset_name']} dataset...")
 
@@ -514,7 +523,7 @@ if __name__ == "__main__":
                             collate_fn = lambda x: _collate_fn(x, tokenizer, config['dataset_name']))
 
     model = MobileBertForSequenceClassification.from_pretrained(config['model_name'])
-    model_fq = quantize_softmax(config, dataloader)
+    model_fq = quantize_softmax(config, dataloader, n_train=N_TRAIN)
     model_tq = IntergerizePass(model_fq)
 
     results = {
