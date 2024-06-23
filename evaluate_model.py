@@ -4,6 +4,7 @@ import os
 from functools import partial
 from typing import Callable, List
 import math
+import copy
 
 import torch
 import torch.nn as nn
@@ -24,7 +25,7 @@ import numpy as np
 
 ############### QuantLib Imports ###############################################
 import quantlib.algorithms as qla
-from fx import HFLeafTracer
+from fx import HFLeafTracer, HistogramPlotter
 from passes import ApproximateSoftmaxPass, IntegerizeSoftmaxPass, CustomAnnotateEpsPass
 from quantlib.editing.fx.passes.general import (ModularizeActivationsPass, RetracePass)
 from quantlib.editing.fx.passes.pact import PACT_OPS, PACT_symbolic_trace
@@ -35,15 +36,16 @@ from fx import SimpleInterpreter, HistogramInterpreter
 
 #Flags
 Plot_Histograms = False  #Overwrites old Histograms, takes a long time
-Plot_Histograms_Integer = True
+Plot_Histograms_Integer = False
 Print_Original_Model = False
 Print_Fake_Quantized_Model = False
 Print_True_Quantized_Model = False
-Verbose_Evaluations = False #Takes more time, for sanity checks on the model
+Verbose_Evaluations = False  #Takes more time, for sanity checks on the model
+Compare_Softmax_Output = False
 # Hyperparameters
-file_path = "results/bias_shift/IBertV4.txt"
-Quantization_Mode = "I-BERT"  # I-BERT, ITA, ITA-Partial
-N_LEVELS_ACTS = 2**8
+file_path = "results/reduced_bitwidth/ITAV4.txt"
+Quantization_Mode = "ITA"  # I-BERT, ITA, ITA-Partial
+N_LEVELS_ACTS = 2**6
 UPPER_PERCENTILE = 99.9
 LOWER_PERCENTILE = 10
 EPOCHS = 5
@@ -53,9 +55,8 @@ NumHiddenLayers = 1
 schedule = {1: "start", (EPOCHS - 1): ["freeze"]}
 actSchedule = {1: "start", (EPOCHS - 1): ["freeze"]}
 epsSchedule = {(EPOCHS - 2): 'start'}
-
 fixed_max_length = 150  # Set a fixed max length for all inputs
-
+histogram = {}
 
 def pearson_correlation(y_true, y_pred):
     correlation, _ = pearsonr(y_true, y_pred)
@@ -156,10 +157,10 @@ softmax_cfg = {
     "lower_percentile": LOWER_PERCENTILE,
     "num_bins": 2**12,
     "rounding": True,
-    "tqt": False,
+    "tqt": True,
     "upper_percentile": UPPER_PERCENTILE,
     "act_kind": "identity",
-    "symm": False,
+    "symm": True,
 }
 def set_seeds(seed=42):
     """ Set seeds for reproducibility. """
@@ -331,7 +332,7 @@ def _collate_fn(batch, tokenizer, task_type):
     return {**batch_inputs, 'labels': labels}
 
 
-def quantize_softmax(config, dataloader, n_train = 10, n_test = 128, epochs = 1, verbose = 0):
+def quantize_softmax(config, dataloader, n_train = 10, n_test = 128, epochs = 1, verbose = 0, plotter = None):
     model = MobileBertForSequenceClassification.from_pretrained(config['model_name'])
     dataset_name = config['dataset_name']
     dataset = load_dataset("nyu-mll/glue", dataset_name)
@@ -375,6 +376,7 @@ def quantize_softmax(config, dataloader, n_train = 10, n_test = 128, epochs = 1,
 
     print("=== Modularize Activations ===")
     traced_mod = ModularizeActivationsPass().apply(traced)
+    copy_traced = copy.deepcopy(traced_mod)
     print("=== Approximate Softmax ===")
     traced_approx = ApproximateSoftmaxPass(**softmax_cfg).apply(traced_mod)
     traced_approx = PACT_symbolic_trace(traced_approx)
@@ -384,17 +386,17 @@ def quantize_softmax(config, dataloader, n_train = 10, n_test = 128, epochs = 1,
     if (Verbose_Evaluations):
         eval_model(config, traced_approx, n_test = n_test)
 
-    train_activations(config, n_train, n_test, dataset, device, traced_approx, dataloader)
+    train_activations(config, n_train, n_test, dataset, device, traced_approx, dataloader, plotter)
     if (Print_Fake_Quantized_Model):
         traced.graph.print_tabular()
-    return traced_approx
+    return traced_approx, copy_traced
 
 
 def get_loss_function(task_type):
     return loss_functions.get(task_type, CrossEntropyLoss())  # Default to CrossEntropyLoss if not specified
 
 
-def train_activations(config, n_train, n_test, dataset, device, traced, dataloader_train_batch):
+def train_activations(config, n_train, n_test, dataset, device, traced, dataloader_train_batch, plotter):
     task_type = config['dataset_name']
     dataset['train'] = dataset['train'].select(range(n_train))
 
@@ -422,8 +424,7 @@ def train_activations(config, n_train, n_test, dataset, device, traced, dataload
     num_train_examples = len(dataset["train"])
     torch.autograd.set_detect_anomaly(True)
 
-    sp = SimpleInterpreter(traced)
-
+    hi = HistogramInterpreter(traced, plotter)
     for epoch in range(EPOCHS):
         actController.step_pre_training_epoch(epoch)
         epsController.step_pre_training_epoch(epoch)
@@ -461,10 +462,9 @@ def train_activations(config, n_train, n_test, dataset, device, traced, dataload
                     break
             pbar_batch.close()
             print(f'Train [{epoch+1}/{EPOCHS}] -- Accuracy: {accuracy:.4f}')
-        if(Plot_Histograms):
-            hi = HistogramInterpreter(traced)
+        if(Plot_Histograms and epoch<=1):
             batch=next(iter(dataloader_train_batch))
-            hi.propagate(epoch, batch["input_ids"], batch["attention_mask"], batch["token_type_ids"])    
+            hi.propagate(epoch, batch["input_ids"], batch["attention_mask"], batch["token_type_ids"])
         # ipdb.set_trace()
 
 
@@ -475,24 +475,54 @@ def IntergerizePass(model):
     model = IntegerizeSoftmaxPass().apply(model)
     return model
 
-def plot_histogram(histogram, node_name, truemin, truemax, running_mean):
-    os.makedirs(f"./histograms_tq/", exist_ok = True)
-    plt.figure()
-    truemin = truemin.item()
-    truemax = truemax.item()
-    running_mean = running_mean.item()
-    plt.hist(histogram, bins = N_LEVELS_ACTS, color = 'blue')
-    plt.axvline(x = running_mean, color = 'black', label = 'Mean')
-    plt.title(f"Histogram for Node {node_name}")
-    plt.xlabel('Activation Values')
-    plt.ylabel('Counts')
-    plt.legend()
+import os
+import matplotlib.pyplot as plt
+
+import os
+import matplotlib.pyplot as plt
+
+def plot_histogram(histogram, node_name, truemin, truemax, running_mean, original, N_LEVELS_ACTS=256):
+    os.makedirs(f"./histograms_tq/", exist_ok=True)
+    
+    # Create a figure with two subplots horizontally split
+    fig, axs = plt.subplots(2, 1, figsize=(12, 12))
+    
+    # Plot the true quantized histogram
+    n_true, bins_true, _ = axs[0].hist(histogram, bins=N_LEVELS_ACTS, color='blue', label='True Quantized', alpha=0.5, density=True)
+    
+    # Clear the initial plot
+    axs[0].clear()
+
+    # Re-plot as a probability distribution
+    axs[0].hist(bins_true[:-1], bins_true, weights=n_true / n_true.sum(), color='blue', label='True Quantized', alpha=0.5)
+    axs[0].set_title(f"True Quantized Distribution", fontsize=20)
+    axs[0].set_xlabel('Values', fontsize=18)
+    axs[0].set_ylabel('Probability', fontsize=18)
+    axs[0].legend(fontsize=16)
+    axs[0].tick_params(axis='both', which='major', labelsize=16)
+    
+    # Plot the original histogram
+    n_orig, bins_orig, _ = axs[1].hist(original, bins=N_LEVELS_ACTS, color='red', label='Original', alpha=0.5, density=True)
+    
+    # Clear the initial plot
+    axs[1].clear()
+
+    # Re-plot as a probability distribution
+    axs[1].hist(bins_orig[:-1], bins_orig, weights=n_orig / n_orig.sum(), color='red', label='Original', alpha=0.5)
+    axs[1].set_title(f"Original Distribution", fontsize=20)
+    axs[1].set_xlabel('Values', fontsize=18)
+    axs[1].set_ylabel('Probability', fontsize=18)
+    axs[1].legend(fontsize=16)
+    axs[1].tick_params(axis='both', which='major', labelsize=16)
+
+    plt.tight_layout()
     plt.savefig(f"./histograms_tq/{node_name}_histogram.png")
     plt.close()
-    plt.figure(figsize = (10, 6))
+
 
 if __name__ == "__main__":
     os.environ["TRANSFORMERS_VERBOSITY"] = "error"
+    hp = HistogramPlotter('both', histogram)
     logging.set_verbosity_error()
     set_seeds()
     parser = argparse.ArgumentParser(description = 'Test different MobileBERT models and datasets.')
@@ -501,14 +531,10 @@ if __name__ == "__main__":
                         help = 'Configuration key for model and dataset',
                         required = False,
                         default = 'mobilebert_sst2')
-    parser.add_argument('--bits',
-                    type=int,
-                    help='Number of bits for quantization',
-                    required=False,
-                    default=8)
-    
+    parser.add_argument('--bits', type = int, help = 'Number of bits for quantization', required = False, default = 3)
+
     args = parser.parse_args()
-    
+
     config = model_dataset_configs[args.config]
     N_LEVELS_ACTS = 2**args.bits
     softmax_cfg["n_levels"] = N_LEVELS_ACTS
@@ -523,16 +549,14 @@ if __name__ == "__main__":
                             collate_fn = lambda x: _collate_fn(x, tokenizer, config['dataset_name']))
 
     model = MobileBertForSequenceClassification.from_pretrained(config['model_name'])
-    model_fq = quantize_softmax(config, dataloader, n_train=N_TRAIN)
+    model_fq, model_traced = quantize_softmax(config, dataloader, n_train = N_TRAIN, plotter = hp)
     model_tq = IntergerizePass(model_fq)
 
     results = {
-        "original": "skipped", #eval_model(config, model, n_test = -1),
-        "fake_quant": eval_model(config, model_fq, n_test = -1),
+        "original": eval_model(config, model, n_test = 0),
+        "fake_quant": eval_model(config, model_fq, n_test = 0),
         "true_quant": eval_model(config, model_tq, n_test = -1)
     }
-
-    
 
     with open(file_path, "a") as file:
         file.write(
@@ -543,18 +567,44 @@ if __name__ == "__main__":
             file.write(f"{model_type.capitalize()} Model: {selected_metric_key.capitalize()}: {result}\n")
     print("Results saved to:", file_path)
 
-    #model_tq.graph.print_tabular()
+    if (Print_True_Quantized_Model):
+        model_tq.graph.print_tabular()
     sp = SimpleInterpreter(model_tq)
     batch = next(iter(dataloader))
     sp.propagate(batch["input_ids"], batch["attention_mask"], batch["token_type_ids"])
     from pprint import pprint
     pprint([{k: [v.min(), v.max(), v[v > -128].mean()]} for k, v in sp.env.items() if "integerize_signed_act" in k])
-
-    if(Plot_Histograms_Integer):
+    if (Plot_Histograms_Integer):
+        count = 0
         for k, v in sp.env.items():
             if "integerize_signed_act" in k:
-                v = v[v > -(N_LEVELS_ACTS // 2)]
-                plot_histogram(v, k, v.min(), v.max(), v.mean())
-            # if "softmax" in k:
-            #     v = v[v > -(N_LEVELS_ACTS // 2)]
-            #     plot_histogram(v, k, v.min(), v.max(), v.mean())
+                v = v[v > -(N_LEVELS_ACTS // 2)].numpy()
+                v = v#*0.7969
+                hist_values, bin_edges = np.histogram(v, bins = N_LEVELS_ACTS, range = (v.min(), v.max()))
+                hp.add_histogram(hist_values, v.min(), v.max(), count, 10, v.min(), v.max(), v.mean(), v.max())
+                count = count + 1
+        hp.save_histograms()
+
+    if (Compare_Softmax_Output):
+        op = SimpleInterpreter(model_traced)
+        tqp = SimpleInterpreter(model_tq)
+        op.propagate(batch["input_ids"], batch["attention_mask"], batch["token_type_ids"])
+        tqp.propagate(batch["input_ids"], batch["attention_mask"], batch["token_type_ids"])
+        original = None
+        true_quant = None
+        for k, v in op.env.items():
+            if "softmax" in k:
+                original = v
+                break
+        for k, v in tqp.env.items():
+            if "integer_softmax_pass" in k:
+                print(k)
+                v[v < 0] = 0  #Remove mask values
+                true_quant = v.float() #/ torch.sum(v.float(), dim = -1, keepdim = True)
+                break
+        print("Original Softmax:", original)
+        print("True Quantized Softmax:", true_quant)
+        print("Difference:", torch.abs(original - true_quant).sum())
+        true_quant = true_quant[true_quant > 0.01].numpy()
+        original = original[original > 0.01].numpy()
+        plot_histogram(true_quant, k, true_quant.min(), true_quant.max(), true_quant.mean(), original)
