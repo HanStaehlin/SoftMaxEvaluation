@@ -54,6 +54,94 @@ data = [
     {'Dataset': 'mrpc', 'Mode': 'I-BERT', 'Bits': 7.0, 'F1': 0.8850174216027874},
     {'Dataset': 'mrpc', 'Mode': 'I-BERT', 'Bits': 8.0, 'F1': 0.8752079866888519},
 ]
+shift_data = [
+    {'Dataset': 'sst2', 'Mode': 'I-BERT with Shift', 'Bits': 2.0, 'Accuracy': 0.4908256880733945},
+    {'Dataset': 'cola', 'Mode': 'I-BERT with Shift', 'Bits': 2.0, 'Mcc': 0.0},
+    {'Dataset': 'rte', 'Mode': 'I-BERT with Shift', 'Bits': 2.0, 'Accuracy': 0.5270758122743683},
+    {'Dataset': 'mrpc', 'Mode': 'I-BERT with Shift', 'Bits': 2.0, 'F1': 0.0},
+    {'Dataset': 'sst2', 'Mode': 'I-BERT with Shift', 'Bits': 3.0, 'Accuracy': 0.4908256880733945},
+    {'Dataset': 'cola', 'Mode': 'I-BERT with Shift', 'Bits': 3.0, 'Mcc': 0.0},
+    {'Dataset': 'rte', 'Mode': 'I-BERT with Shift', 'Bits': 3.0, 'Accuracy': 0.5270758122743683},
+    {'Dataset': 'mrpc', 'Mode': 'I-BERT with Shift', 'Bits': 3.0, 'F1': 0.0},
+    {'Dataset': 'sst2', 'Mode': 'I-BERT with Shift', 'Bits': 4.0, 'Accuracy': 0.5653669724770642},
+    {'Dataset': 'cola', 'Mode': 'I-BERT with Shift', 'Bits': 4.0, 'Mcc': 0.37739928325901934},
+    {'Dataset': 'rte', 'Mode': 'I-BERT with Shift', 'Bits': 4.0, 'Accuracy': 0.5270758122743683},
+    {'Dataset': 'mrpc', 'Mode': 'I-BERT with Shift', 'Bits': 4.0, 'F1': 0.0},
+    {'Dataset': 'sst2', 'Mode': 'I-BERT with Shift', 'Bits': 5.0, 'Accuracy': 0.7993119266055045},
+    {'Dataset': 'cola', 'Mode': 'I-BERT with Shift', 'Bits': 5.0, 'Mcc': 0.47429960695134216},
+    {'Dataset': 'rte', 'Mode': 'I-BERT with Shift', 'Bits': 5.0, 'Accuracy': 0.5487364620938628},
+    {'Dataset': 'mrpc', 'Mode': 'I-BERT with Shift', 'Bits': 5.0, 'F1': 0.05536332179930796},
+    {'Dataset': 'sst2', 'Mode': 'I-BERT with Shift', 'Bits': 6.0, 'Accuracy': 0.9048165137614679},
+    {'Dataset': 'cola', 'Mode': 'I-BERT with Shift', 'Bits': 6.0, 'Mcc': 0.49660257394438423},
+    {'Dataset': 'rte', 'Mode': 'I-BERT with Shift', 'Bits': 6.0, 'Accuracy': 0.5848375451263538},
+    {'Dataset': 'mrpc', 'Mode': 'I-BERT with Shift', 'Bits': 6.0, 'F1': 0.7519685039370079},
+    {'Dataset': 'sst2', 'Mode': 'I-BERT with Shift', 'Bits': 7.0, 'Accuracy': 0.9002293577981652},
+    {'Dataset': 'cola', 'Mode': 'I-BERT with Shift', 'Bits': 7.0, 'Mcc': 0.5201268334027794},
+    {'Dataset': 'rte', 'Mode': 'I-BERT with Shift', 'Bits': 7.0, 'Accuracy': 0.6353790613718412},
+    {'Dataset': 'mrpc', 'Mode': 'I-BERT with Shift', 'Bits': 7.0, 'F1': 0.8811881188118812},
+    {'Dataset': 'sst2', 'Mode': 'I-BERT with Shift', 'Bits': 8.0, 'Accuracy': 0.9025229357798165},
+    {'Dataset': 'cola', 'Mode': 'I-BERT with Shift', 'Bits': 8.0, 'Mcc': 0.5023519246991239},
+    {'Dataset': 'rte', 'Mode': 'I-BERT with Shift', 'Bits': 8.0, 'Accuracy': 0.6425992779783394},
+    {'Dataset': 'mrpc', 'Mode': 'I-BERT with Shift', 'Bits': 8.0, 'F1': 0.8667736757624398},
+
+    {'Dataset': 'sst2', 'Mode': 'I-BERTV2', 'Bits': 2.0, 'Accuracy': 0.49311926605504586},
+    {'Dataset': 'cola', 'Mode': 'I-BERTV2', 'Bits': 2.0, 'Mcc': 0.0},
+    {'Dataset': 'rte', 'Mode': 'I-BERTV2', 'Bits': 2.0, 'Accuracy': 0.5270758122743683},
+    {'Dataset': 'mrpc', 'Mode': 'I-BERTV2', 'Bits': 2.0, 'F1': 0.0},
+    {'Dataset': 'sst2', 'Mode': 'I-BERTV2', 'Bits': 3.0, 'Accuracy': 0.49311926605504586},
+    {'Dataset': 'cola', 'Mode': 'I-BERTV2', 'Bits': 3.0, 'Mcc': 0.018957852091478794},
+    {'Dataset': 'rte', 'Mode': 'I-BERTV2', 'Bits': 3.0, 'Accuracy': 0.5270758122743683},
+    {'Dataset': 'mrpc', 'Mode': 'I-BERTV2', 'Bits': 3.0, 'F1': 0.0},
+    {'Dataset': 'sst2', 'Mode': 'I-BERTV2', 'Bits': 4.0, 'Accuracy': 0.8188073394495413},
+    {'Dataset': 'cola', 'Mode': 'I-BERTV2', 'Bits': 4.0, 'Mcc': 0.40739928325901934},
+    {'Dataset': 'rte', 'Mode': 'I-BERTV2', 'Bits': 4.0, 'Accuracy': 0.5270758122743683},
+    {'Dataset': 'mrpc', 'Mode': 'I-BERTV2', 'Bits': 4.0, 'F1': 0.6299810246679317},
+    {'Dataset': 'sst2', 'Mode': 'I-BERTV2', 'Bits': 5.0, 'Accuracy': 0.9013761467889908},
+    {'Dataset': 'cola', 'Mode': 'I-BERTV2', 'Bits': 5.0, 'Mcc': 0.47826643579049904},
+    {'Dataset': 'rte', 'Mode': 'I-BERTV2', 'Bits': 5.0, 'Accuracy': 0.555956678700361},
+    {'Dataset': 'mrpc', 'Mode': 'I-BERTV2', 'Bits': 5.0, 'F1': 0.7454909819639278},
+    {'Dataset': 'sst2', 'Mode': 'I-BERTV2', 'Bits': 6.0, 'Accuracy': 0.9002293577981652},
+    {'Dataset': 'cola', 'Mode': 'I-BERTV2', 'Bits': 6.0, 'Mcc': 0.512703445942988},
+    {'Dataset': 'rte', 'Mode': 'I-BERTV2', 'Bits': 6.0, 'Accuracy': 0.6462093862815884},
+    {'Dataset': 'mrpc', 'Mode': 'I-BERTV2', 'Bits': 6.0, 'F1': 0.8301886792452831},
+    {'Dataset': 'sst2', 'Mode': 'I-BERTV2', 'Bits': 7.0, 'Accuracy': 0.9094036697247706},
+    {'Dataset': 'cola', 'Mode': 'I-BERTV2', 'Bits': 7.0, 'Mcc': 0.5207572018426233},
+    {'Dataset': 'rte', 'Mode': 'I-BERTV2', 'Bits': 7.0, 'Accuracy': 0.6570397111913358},
+    {'Dataset': 'mrpc', 'Mode': 'I-BERTV2', 'Bits': 7.0, 'F1': 0.875886524822695},
+    {'Dataset': 'sst2', 'Mode': 'I-BERTV2', 'Bits': 8.0, 'Accuracy': 0.9059633027522935},
+    {'Dataset': 'cola', 'Mode': 'I-BERTV2', 'Bits': 8.0, 'Mcc': 0.5046718184221465},
+    {'Dataset': 'rte', 'Mode': 'I-BERTV2', 'Bits': 8.0, 'Accuracy': 0.6498194945848376},
+    {'Dataset': 'mrpc', 'Mode': 'I-BERTV2', 'Bits': 8.0, 'F1': 0.8784722222222222},
+
+    {'Dataset': 'sst2', 'Mode': 'I-BERTV2 with Shift', 'Bits': 2.0, 'Accuracy': 0.4908256880733945},
+    {'Dataset': 'cola', 'Mode': 'I-BERTV2 with Shift', 'Bits': 2.0, 'Mcc': 0.0},
+    {'Dataset': 'rte', 'Mode': 'I-BERTV2 with Shift', 'Bits': 2.0, 'Accuracy': 0.4657039711191336},
+    {'Dataset': 'mrpc', 'Mode': 'I-BERTV2 with Shift', 'Bits': 2.0, 'F1': 0.0},
+    {'Dataset': 'sst2', 'Mode': 'I-BERTV2 with Shift', 'Bits': 3.0, 'Accuracy': 0.6112385321100917},
+    {'Dataset': 'cola', 'Mode': 'I-BERTV2 with Shift', 'Bits': 3.0, 'Mcc': 0.17077651041202851},
+    {'Dataset': 'rte', 'Mode': 'I-BERTV2 with Shift', 'Bits': 3.0, 'Accuracy': 0.5018050541516246},
+    {'Dataset': 'mrpc', 'Mode': 'I-BERTV2 with Shift', 'Bits': 3.0, 'F1': 0.007067137809187279},
+    {'Dataset': 'sst2', 'Mode': 'I-BERTV2 with Shift', 'Bits': 4.0, 'Accuracy': 0.8623853211009175},
+    {'Dataset': 'cola', 'Mode': 'I-BERTV2 with Shift', 'Bits': 4.0, 'Mcc': 0.4312263576038266},
+    {'Dataset': 'rte', 'Mode': 'I-BERTV2 with Shift', 'Bits': 4.0, 'Accuracy': 0.516245487364621},
+    {'Dataset': 'mrpc', 'Mode': 'I-BERTV2 with Shift', 'Bits': 4.0, 'F1': 0.6857039711191336},
+    {'Dataset': 'sst2', 'Mode': 'I-BERTV2 with Shift', 'Bits': 5.0, 'Accuracy': 0.9013761467889908},
+    {'Dataset': 'cola', 'Mode': 'I-BERTV2 with Shift', 'Bits': 5.0, 'Mcc': 0.47826643579049904},
+    {'Dataset': 'rte', 'Mode': 'I-BERTV2 with Shift', 'Bits': 5.0, 'Accuracy': 0.555956678700361},
+    {'Dataset': 'mrpc', 'Mode': 'I-BERTV2 with Shift', 'Bits': 5.0, 'F1': 0.7454909819639278},
+    {'Dataset': 'sst2', 'Mode': 'I-BERTV2 with Shift', 'Bits': 6.0, 'Accuracy': 0.9002293577981652},
+    {'Dataset': 'cola', 'Mode': 'I-BERTV2 with Shift', 'Bits': 6.0, 'Mcc': 0.512703445942988},
+    {'Dataset': 'rte', 'Mode': 'I-BERTV2 with Shift', 'Bits': 6.0, 'Accuracy': 0.6462093862815884},
+    {'Dataset': 'mrpc', 'Mode': 'I-BERTV2 with Shift', 'Bits': 6.0, 'F1': 0.8301886792452831},
+    {'Dataset': 'sst2', 'Mode': 'I-BERTV2 with Shift', 'Bits': 7.0, 'Accuracy': 0.9094036697247706},
+    {'Dataset': 'cola', 'Mode': 'I-BERTV2 with Shift', 'Bits': 7.0, 'Mcc': 0.5207572018426233},
+    {'Dataset': 'rte', 'Mode': 'I-BERTV2 with Shift', 'Bits': 7.0, 'Accuracy': 0.6570397111913358},
+    {'Dataset': 'mrpc', 'Mode': 'I-BERTV2 with Shift', 'Bits': 7.0, 'F1': 0.875886524822695},
+    {'Dataset': 'sst2', 'Mode': 'I-BERTV2 with Shift', 'Bits': 8.0, 'Accuracy': 0.9059633027522935},
+    {'Dataset': 'cola', 'Mode': 'I-BERTV2 with Shift', 'Bits': 8.0, 'Mcc': 0.5046718184221465},
+    {'Dataset': 'rte', 'Mode': 'I-BERTV2 with Shift', 'Bits': 8.0, 'Accuracy': 0.6498194945848376},
+    {'Dataset': 'mrpc', 'Mode': 'I-BERTV2 with Shift', 'Bits': 8.0, 'F1': 0.8784722222222222},
+]
 # Colorblind-friendly color palette
 color_palette = ['#377eb8', '#ff7f00', '#4daf4a', '#f781bf', '#984ea3', '#a65628', '#999999', '#e41a1c', '#dede00']
 
@@ -180,9 +268,6 @@ shift_data = [
     {'Dataset': 'cola', 'Mode': 'I-BERTV2 with Shift', 'Bits': 8.0, 'Mcc': 0.5046718184221465},
     {'Dataset': 'rte', 'Mode': 'I-BERTV2 with Shift', 'Bits': 8.0, 'Accuracy': 0.6498194945848376},
     {'Dataset': 'mrpc', 'Mode': 'I-BERTV2 with Shift', 'Bits': 8.0, 'F1': 0.8784722222222222},
-
-    
-
 ]
 
 # Extend the original I-BERT DataFrame with shift data
@@ -208,15 +293,16 @@ for i, mode in enumerate(df_filtered['Mode'].unique()):
     linestyle = "solid"
     # if "I-BERTV2 with Shift" in mode:
     #     # continue
-    # if "Softermax" in mode:
-    #     linestyle = "solid"
-    #     line_width = 16
-    # elif "V2" not in mode:
-    #     linestyle = "solid"
-    #     line_width = 8
-    # else:
-    #     linestyle = "solid"
-    #     line_width = 8
+    if "Softermax" in mode:
+        linestyle = "solid"
+        line_width = 16
+    elif "V2" not in mode:
+        linestyle = "solid"
+        line_width = 8
+    else:
+        linestyle = "solid"
+        line_width = 8
+    linestyle = None
     ax.plot(df_mode['Bits'], df_mode['Accuracy'], label=mode, marker='o', color=color_palette[i % len(color_palette)], linewidth=line_width, linestyle=linestyle, markersize=16)
 line_width = 8
 ax.axhline(y=baseline_values['sst2'], color='r', linestyle='--', label='Baseline', linewidth=line_width, alpha=0.5)
@@ -285,5 +371,5 @@ ax.grid(True)
 
 # Adjust layout
 plt.tight_layout()
-plt.savefig('results/bias_shift/plot.png')
+plt.savefig('plot.png')
 print("Plots have been saved to bias_shift_analysis.png")

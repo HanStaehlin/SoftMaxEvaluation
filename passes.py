@@ -47,11 +47,13 @@ class NormalizeSoftmaxOutput(nn.Module):
         # Convert integer output to float for division operation
         x_float = x.float()
 
-        #normalized_output = x_float/(self.n_levels-1.)
+        normalized_output = x_float/(self.n_levels-1.)
         # Calculate the sum of the softmax outputs across the specified dimension
-        sum_x = torch.sum(x_float, dim=self.dim, keepdim=True)
+
+        # sum_x = torch.sum(x_float, dim=self.dim, keepdim=True)
+        # sum_x[sum_x == 0] = 1
         # # Normalize each element by the sum to get probabilities that sum to 1
-        normalized_output = x_float / sum_x
+        #normalized_output = x_float / sum_x
 
         return normalized_output
 

@@ -23,3 +23,91 @@ Dataset: cola, Model: Alireza1044/mobilebert_cola, Mode: ITA, Bits: 5.0, Clip_Bo
 Original Model: Mcc: 0.0
 Fake_quant Model: Mcc: 0.0
 True_quant Model: Mcc: 0.0
+Dataset: sst2, Model: Alireza1044/mobilebert_sst2, Mode: ITA, Bits: 6.0, Clip_Bounds_Sym: True 
+Original Model: Accuracy: nan
+Fake_quant Model: Accuracy: nan
+True_quant Model: Accuracy: 0.9036697247706422
+Dataset: sst2, Model: Alireza1044/mobilebert_sst2, Mode: ITA, Bits: 6.0, Clip_Bounds_Sym: True 
+Original Model: Accuracy: nan
+Fake_quant Model: Accuracy: nan
+True_quant Model: Accuracy: 0.9036697247706422
+Dataset: sst2, Model: Alireza1044/mobilebert_sst2, Mode: ITA, Bits: 4.0, Clip_Bounds_Sym: True 
+Original Model: Accuracy: nan
+Fake_quant Model: Accuracy: nan
+True_quant Model: Accuracy: 0.4908256880733945
+Dataset: cola, Model: Alireza1044/mobilebert_cola, Mode: ITA, Bits: 4.0, Clip_Bounds_Sym: True 
+Original Model: Mcc: 0.0
+Fake_quant Model: Mcc: 0.0
+True_quant Model: Mcc: -0.028044982189654497
+Dataset: rte, Model: Alireza1044/mobilebert_rte, Mode: ITA, Bits: 4.0, Clip_Bounds_Sym: True 
+Original Model: Accuracy: nan
+Fake_quant Model: Accuracy: nan
+True_quant Model: Accuracy: 0.5270758122743683
+Dataset: mrpc, Model: Alireza1044/mobilebert_mrpc, Mode: ITA, Bits: 4.0, Clip_Bounds_Sym: True 
+Original Model: F1: 0.0
+Fake_quant Model: F1: 0.0
+True_quant Model: F1: 0.0
+Dataset: sst2, Model: Alireza1044/mobilebert_sst2, Mode: ITA, Bits: 5.0, Clip_Bounds_Sym: True 
+Original Model: Accuracy: nan
+Fake_quant Model: Accuracy: nan
+True_quant Model: Accuracy: 0.8176605504587156
+Dataset: cola, Model: Alireza1044/mobilebert_cola, Mode: ITA, Bits: 5.0, Clip_Bounds_Sym: True 
+Original Model: Mcc: 0.0
+Fake_quant Model: Mcc: 0.0
+True_quant Model: Mcc: 0.5222017375430389
+Dataset: rte, Model: Alireza1044/mobilebert_rte, Mode: ITA, Bits: 5.0, Clip_Bounds_Sym: True 
+Original Model: Accuracy: nan
+Fake_quant Model: Accuracy: nan
+True_quant Model: Accuracy: 0.555956678700361
+Dataset: mrpc, Model: Alireza1044/mobilebert_mrpc, Mode: ITA, Bits: 5.0, Clip_Bounds_Sym: True 
+Original Model: F1: 0.0
+Fake_quant Model: F1: 0.0
+True_quant Model: F1: 0.19558359621451105
+Dataset: sst2, Model: Alireza1044/mobilebert_sst2, Mode: ITA, Bits: 3.0, Clip_Bounds_Sym: True 
+Original Model: Accuracy: nan
+Fake_quant Model: Accuracy: nan
+True_quant Model: Accuracy: 0.4908256880733945
+Dataset: sst2, Model: Alireza1044/mobilebert_sst2, Mode: ITA, Bits: 4.0, Clip_Bounds_Sym: True 
+Original Model: Accuracy: nan
+Fake_quant Model: Accuracy: nan
+True_quant Model: Accuracy: 0.5814220183486238
+Dataset: sst2, Model: Alireza1044/mobilebert_sst2, Mode: ITA, Bits: 4.0, Clip_Bounds_Sym: True 
+Original Model: Accuracy: nan
+Fake_quant Model: Accuracy: nan
+True_quant Model: Accuracy: 0.4908256880733945
+Dataset: sst2, Model: Alireza1044/mobilebert_sst2, Mode: ITA, Bits: 4.0, Clip_Bounds_Sym: True 
+Original Model: Accuracy: nan
+Fake_quant Model: Accuracy: nan
+True_quant Model: Accuracy: 0.573394495412844
+Dataset: sst2, Model: Alireza1044/mobilebert_sst2, Mode: ITA, Bits: 3.0, Clip_Bounds_Sym: True 
+Original Model: Accuracy: nan
+Fake_quant Model: Accuracy: nan
+True_quant Model: Accuracy: 0.4908256880733945
+Dataset: sst2, Model: Alireza1044/mobilebert_sst2, Mode: I-BERT, Bits: 5.0, Clip_Bounds_Sym: True 
+Original Model: Accuracy: nan
+Fake_quant Model: Accuracy: nan
+True_quant Model: Accuracy: nan
+Dataset: sst2, Model: Alireza1044/mobilebert_sst2, Mode: I-BERT, Bits: 6.0, Clip_Bounds_Sym: True 
+Original Model: Accuracy: nan
+Fake_quant Model: Accuracy: nan
+True_quant Model: Accuracy: nan
+Dataset: sst2, Model: Alireza1044/mobilebert_sst2, Mode: I-BERT, Bits: 5.0, Clip_Bounds_Sym: True 
+Original Model: Accuracy: nan
+Fake_quant Model: Accuracy: nan
+True_quant Model: Accuracy: nan
+Dataset: sst2, Model: Alireza1044/mobilebert_sst2, Mode: I-BERT, Bits: 5.0, Clip_Bounds_Sym: True 
+Original Model: Accuracy: nan
+Fake_quant Model: Accuracy: nan
+True_quant Model: Accuracy: nan
+Dataset: sst2, Model: Alireza1044/mobilebert_sst2, Mode: I-BERT, Bits: 3.0, Clip_Bounds_Sym: True 
+Original Model: Accuracy: nan
+Fake_quant Model: Accuracy: nan
+True_quant Model: Accuracy: nan
+Dataset: sst2, Model: Alireza1044/mobilebert_sst2, Mode: I-BERT, Bits: 3.0, Clip_Bounds_Sym: True 
+Original Model: Accuracy: nan
+Fake_quant Model: Accuracy: nan
+True_quant Model: Accuracy: nan
+Dataset: sst2, Model: Alireza1044/mobilebert_sst2, Mode: I-BERT, Bits: 5.0, Clip_Bounds_Sym: False 
+Original Model: Accuracy: nan
+Fake_quant Model: Accuracy: nan
+True_quant Model: Accuracy: nan

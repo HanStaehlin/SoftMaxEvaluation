@@ -41,10 +41,10 @@ Print_Original_Model = False
 Print_Fake_Quantized_Model = False
 Print_True_Quantized_Model = False
 Verbose_Evaluations = False  #Takes more time, for sanity checks on the model
-Compare_Softmax_Output = False
+Compare_Softmax_Output = True
 # Hyperparameters
 file_path = "results/reduced_bitwidth/ITAV4.txt"
-Quantization_Mode = "ITA"  # I-BERT, ITA, ITA-Partial
+Quantization_Mode = "I-BERT"  # I-BERT, ITA, ITA-Partial
 N_LEVELS_ACTS = 2**6
 UPPER_PERCENTILE = 99.9
 LOWER_PERCENTILE = 10
@@ -157,10 +157,10 @@ softmax_cfg = {
     "lower_percentile": LOWER_PERCENTILE,
     "num_bins": 2**12,
     "rounding": True,
-    "tqt": True,
+    "tqt": False,
     "upper_percentile": UPPER_PERCENTILE,
     "act_kind": "identity",
-    "symm": True,
+    "symm": False,
 }
 def set_seeds(seed=42):
     """ Set seeds for reproducibility. """
@@ -475,17 +475,12 @@ def IntergerizePass(model):
     model = IntegerizeSoftmaxPass().apply(model)
     return model
 
-import os
-import matplotlib.pyplot as plt
-
-import os
-import matplotlib.pyplot as plt
 
 def plot_histogram(histogram, node_name, truemin, truemax, running_mean, original, N_LEVELS_ACTS=256):
     os.makedirs(f"./histograms_tq/", exist_ok=True)
     
     # Create a figure with two subplots horizontally split
-    fig, axs = plt.subplots(2, 1, figsize=(12, 12))
+    fig, axs = plt.subplots(2, 1, figsize=(9, 12))
     
     # Plot the true quantized histogram
     n_true, bins_true, _ = axs[0].hist(histogram, bins=N_LEVELS_ACTS, color='blue', label='True Quantized', alpha=0.5, density=True)
@@ -495,10 +490,9 @@ def plot_histogram(histogram, node_name, truemin, truemax, running_mean, origina
 
     # Re-plot as a probability distribution
     axs[0].hist(bins_true[:-1], bins_true, weights=n_true / n_true.sum(), color='blue', label='True Quantized', alpha=0.5)
-    axs[0].set_title(f"True Quantized Distribution", fontsize=20)
-    axs[0].set_xlabel('Values', fontsize=18)
-    axs[0].set_ylabel('Probability', fontsize=18)
-    axs[0].legend(fontsize=16)
+    axs[0].set_xlabel('Values', fontsize=24)
+    axs[0].set_ylabel('Probability', fontsize=24)
+    axs[0].legend(fontsize=24)
     axs[0].tick_params(axis='both', which='major', labelsize=16)
     
     # Plot the original histogram
@@ -509,10 +503,9 @@ def plot_histogram(histogram, node_name, truemin, truemax, running_mean, origina
 
     # Re-plot as a probability distribution
     axs[1].hist(bins_orig[:-1], bins_orig, weights=n_orig / n_orig.sum(), color='red', label='Original', alpha=0.5)
-    axs[1].set_title(f"Original Distribution", fontsize=20)
-    axs[1].set_xlabel('Values', fontsize=18)
-    axs[1].set_ylabel('Probability', fontsize=18)
-    axs[1].legend(fontsize=16)
+    axs[1].set_xlabel('Values', fontsize=24)
+    axs[1].set_ylabel('Probability', fontsize=24)
+    axs[1].legend(fontsize=24)
     axs[1].tick_params(axis='both', which='major', labelsize=16)
 
     plt.tight_layout()
@@ -555,7 +548,7 @@ if __name__ == "__main__":
     results = {
         "original": eval_model(config, model, n_test = 0),
         "fake_quant": eval_model(config, model_fq, n_test = 0),
-        "true_quant": eval_model(config, model_tq, n_test = -1)
+        "true_quant": eval_model(config, model_tq, n_test = 0)
     }
 
     with open(file_path, "a") as file:
