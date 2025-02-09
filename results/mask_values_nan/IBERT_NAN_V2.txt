@@ -1,0 +1,80 @@
+Dataset: sst2, Model: Alireza1044/mobilebert_sst2, Mode: I-BERT, Bits: 4.0, Clip_Bounds_Sym: True 
+Original Model: Accuracy: skipped
+Fake_quant Model: Accuracy: 0.4908256880733945
+True_quant Model: Accuracy: 0.4908256880733945
+Dataset: cola, Model: Alireza1044/mobilebert_cola, Mode: I-BERT, Bits: 4.0, Clip_Bounds_Sym: True 
+Original Model: Mcc: skipped
+Fake_quant Model: Mcc: 0.0
+True_quant Model: Mcc: 0.0
+Dataset: rte, Model: Alireza1044/mobilebert_rte, Mode: I-BERT, Bits: 4.0, Clip_Bounds_Sym: True 
+Original Model: Accuracy: skipped
+Fake_quant Model: Accuracy: 0.5306859205776173
+True_quant Model: Accuracy: 0.5270758122743683
+Dataset: mrpc, Model: Alireza1044/mobilebert_mrpc, Mode: I-BERT, Bits: 5.0, Clip_Bounds_Sym: True 
+Original Model: F1: skipped
+Fake_quant Model: F1: 0.6339468302658486
+True_quant Model: F1: 0.0
+Dataset: sst2, Model: Alireza1044/mobilebert_sst2, Mode: I-BERT, Bits: 5.0, Clip_Bounds_Sym: True 
+Original Model: Accuracy: skipped
+Fake_quant Model: Accuracy: 0.8474770642201835
+True_quant Model: Accuracy: 0.4908256880733945
+Dataset: cola, Model: Alireza1044/mobilebert_cola, Mode: I-BERT, Bits: 5.0, Clip_Bounds_Sym: True 
+Original Model: Mcc: skipped
+Fake_quant Model: Mcc: 0.13794017432389633
+True_quant Model: Mcc: 0.0
+Dataset: rte, Model: Alireza1044/mobilebert_rte, Mode: I-BERT, Bits: 5.0, Clip_Bounds_Sym: True 
+Original Model: Accuracy: skipped
+Fake_quant Model: Accuracy: 0.5379061371841155
+True_quant Model: Accuracy: 0.5270758122743683
+Dataset: mrpc, Model: Alireza1044/mobilebert_mrpc, Mode: I-BERT, Bits: 6.0, Clip_Bounds_Sym: True 
+Original Model: F1: skipped
+Fake_quant Model: F1: 0.8615916955017301
+True_quant Model: F1: 0.8055009823182712
+Dataset: sst2, Model: Alireza1044/mobilebert_sst2, Mode: I-BERT, Bits: 6.0, Clip_Bounds_Sym: True 
+Original Model: Accuracy: skipped
+Fake_quant Model: Accuracy: 0.9071100917431193
+True_quant Model: Accuracy: 0.9048165137614679
+Dataset: cola, Model: Alireza1044/mobilebert_cola, Mode: I-BERT, Bits: 6.0, Clip_Bounds_Sym: True 
+Original Model: Mcc: skipped
+Fake_quant Model: Mcc: 0.525153188567798
+True_quant Model: Mcc: 0.5342661861783563
+Dataset: rte, Model: Alireza1044/mobilebert_rte, Mode: I-BERT, Bits: 6.0, Clip_Bounds_Sym: True 
+Original Model: Accuracy: skipped
+Fake_quant Model: Accuracy: 0.6425992779783394
+True_quant Model: Accuracy: 0.592057761732852
+Dataset: mrpc, Model: Alireza1044/mobilebert_mrpc, Mode: I-BERT, Bits: 7.0, Clip_Bounds_Sym: True 
+Original Model: F1: skipped
+Fake_quant Model: F1: 0.8634920634920635
+True_quant Model: F1: 0.8783068783068783
+Dataset: sst2, Model: Alireza1044/mobilebert_sst2, Mode: I-BERT, Bits: 7.0, Clip_Bounds_Sym: True 
+Original Model: Accuracy: skipped
+Fake_quant Model: Accuracy: 0.8990825688073395
+True_quant Model: Accuracy: 0.9013761467889908
+Dataset: cola, Model: Alireza1044/mobilebert_cola, Mode: I-BERT, Bits: 7.0, Clip_Bounds_Sym: True 
+Original Model: Mcc: skipped
+Fake_quant Model: Mcc: 0.5161935348983805
+True_quant Model: Mcc: 0.5266648955454677
+Dataset: rte, Model: Alireza1044/mobilebert_rte, Mode: I-BERT, Bits: 7.0, Clip_Bounds_Sym: True 
+Original Model: Accuracy: skipped
+Fake_quant Model: Accuracy: 0.6245487364620939
+True_quant Model: Accuracy: 0.6498194945848376
+Dataset: mrpc, Model: Alireza1044/mobilebert_mrpc, Mode: I-BERT, Bits: 8.0, Clip_Bounds_Sym: True 
+Original Model: F1: skipped
+Fake_quant Model: F1: 0.85625
+True_quant Model: F1: 0.8844221105527639
+Dataset: sst2, Model: Alireza1044/mobilebert_sst2, Mode: I-BERT, Bits: 8.0, Clip_Bounds_Sym: True 
+Original Model: Accuracy: skipped
+Fake_quant Model: Accuracy: 0.9059633027522935
+True_quant Model: Accuracy: 0.9025229357798165
+Dataset: cola, Model: Alireza1044/mobilebert_cola, Mode: I-BERT, Bits: 8.0, Clip_Bounds_Sym: True 
+Original Model: Mcc: skipped
+Fake_quant Model: Mcc: 0.5338312012443657
+True_quant Model: Mcc: 0.5474865115851942
+Dataset: rte, Model: Alireza1044/mobilebert_rte, Mode: I-BERT, Bits: 8.0, Clip_Bounds_Sym: True 
+Original Model: Accuracy: skipped
+Fake_quant Model: Accuracy: 0.5992779783393501
+True_quant Model: Accuracy: 0.6028880866425993
+Dataset: mrpc, Model: Alireza1044/mobilebert_mrpc, Mode: I-BERT, Bits: 4.0, Clip_Bounds_Sym: True 
+Original Model: F1: skipped
+Fake_quant Model: F1: 0.028268551236749116
+True_quant Model: F1: 0.0

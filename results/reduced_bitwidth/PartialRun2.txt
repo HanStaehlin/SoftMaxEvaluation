@@ -1,0 +1,32 @@
+Dataset: rte, Model: Alireza1044/mobilebert_rte, Mode: ITA-Partial, Bits: 4.0, Clip_Bounds_Sym: True 
+Original Model: Accuracy: skipped
+Fake_quant Model: Accuracy: skipped
+True_quant Model: Accuracy: 0.5270758122743683
+Dataset: mrpc, Model: Alireza1044/mobilebert_mrpc, Mode: ITA-Partial, Bits: 4.0, Clip_Bounds_Sym: True 
+Original Model: F1: skipped
+Fake_quant Model: F1: skipped
+True_quant Model: F1: 0.0
+Dataset: rte, Model: Alireza1044/mobilebert_rte, Mode: ITA-Partial, Bits: 5.0, Clip_Bounds_Sym: True 
+Original Model: Accuracy: skipped
+Fake_quant Model: Accuracy: skipped
+True_quant Model: Accuracy: 0.5631768953068592
+Dataset: mrpc, Model: Alireza1044/mobilebert_mrpc, Mode: ITA-Partial, Bits: 5.0, Clip_Bounds_Sym: True 
+Original Model: F1: skipped
+Fake_quant Model: F1: skipped
+True_quant Model: F1: 0.2598187311178248
+Dataset: rte, Model: Alireza1044/mobilebert_rte, Mode: ITA-Partial, Bits: 6.0, Clip_Bounds_Sym: True 
+Original Model: Accuracy: skipped
+Fake_quant Model: Accuracy: skipped
+True_quant Model: Accuracy: 0.592057761732852
+Dataset: mrpc, Model: Alireza1044/mobilebert_mrpc, Mode: ITA-Partial, Bits: 6.0, Clip_Bounds_Sym: True 
+Original Model: F1: skipped
+Fake_quant Model: F1: skipped
+True_quant Model: F1: 0.7733333333333333
+Dataset: rte, Model: Alireza1044/mobilebert_rte, Mode: ITA-Partial, Bits: 7.0, Clip_Bounds_Sym: True 
+Original Model: Accuracy: skipped
+Fake_quant Model: Accuracy: skipped
+True_quant Model: Accuracy: 0.5956678700361011
+Dataset: mrpc, Model: Alireza1044/mobilebert_mrpc, Mode: ITA-Partial, Bits: 7.0, Clip_Bounds_Sym: True 
+Original Model: F1: skipped
+Fake_quant Model: F1: skipped
+True_quant Model: F1: 0.7757352941176471

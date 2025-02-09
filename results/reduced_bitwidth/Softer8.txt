@@ -1,0 +1,16 @@
+Dataset: sst2, Model: Alireza1044/mobilebert_sst2, Mode: Softermax, Bits: 8.0, Clip_Bounds_Sym: True 
+Original Model: Accuracy: skipped
+Fake_quant Model: Accuracy: 0.8979357798165137
+True_quant Model: Accuracy: 0.9048165137614679
+Dataset: cola, Model: Alireza1044/mobilebert_cola, Mode: Softermax, Bits: 8.0, Clip_Bounds_Sym: True 
+Original Model: Mcc: skipped
+Fake_quant Model: Mcc: 0.5238946707778435
+True_quant Model: Mcc: 0.5462521859735874
+Dataset: rte, Model: Alireza1044/mobilebert_rte, Mode: Softermax, Bits: 8.0, Clip_Bounds_Sym: True 
+Original Model: Accuracy: skipped
+Fake_quant Model: Accuracy: 0.5018050541516246
+True_quant Model: Accuracy: 0.5451263537906137
+Dataset: mrpc, Model: Alireza1044/mobilebert_mrpc, Mode: Softermax, Bits: 8.0, Clip_Bounds_Sym: True 
+Original Model: F1: skipped
+Fake_quant Model: F1: 0.8431372549019608
+True_quant Model: F1: 0.7575221238938054
