@@ -110,13 +110,6 @@ Please feel free to submit issues and pull requests for:
 - Performance improvements
 - Bug fixes
 
-## License
-
-[Add your license information here]
-
-## Citation
-
-[Add citation information if applicable]
 
 ## Acknowledgments
 
