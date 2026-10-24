@@ -33,3 +33,7 @@ __pycache__/
 
 # Virtual environment
 venv/
+# Generated plots and editor settings
+histograms/
+histograms_tq/
+.vscode/

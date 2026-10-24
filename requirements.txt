@@ -1,2 +1,9 @@
 numpy
 torch
+transformers
+datasets
+scipy
+scikit-learn
+tqdm
+matplotlib
+ipdb
